@@ -1,11 +1,14 @@
 #include "Socket.hpp"
 
+#include <csignal>
 #include <iostream>
 #include <stdexcept>
-
+#include <thread>
 using namespace std;
-bool Socket::stop = true;
-void Socket::cleanUp() { stop = false; }
+void sigintHandler(int dummpy) { Socket::cleanUp(); }
+
+bool Socket::stop = false;
+void Socket::cleanUp() { stop = true; }
 
 Socket::~Socket() {
     cout << "closing" << endl;
@@ -20,14 +23,14 @@ Socket::Socket(int domain, int type, int protocol, int port, int queue_size,
     addr_.sin_addr.s_addr = INADDR_ANY;
     addr_.sin_port = htons(port);
     int on = 1;
-    setsockopt(socket_fd_, SOL_SOCKET,  SO_REUSEADDR,
-                  &on, sizeof(on));
+    setsockopt(socket_fd_, SOL_SOCKET, SO_REUSEADDR,
+               &on, sizeof(on));
 
     client_size_ = client_size;
     fds_ = new pollfd[client_size + 1];
     memset(fds_, 0, sizeof(pollfd) * (client_size + 1));
     fds_[0].fd = socket_fd_;
-    fds_[0].events = POLLIN;
+    fds_[0].events = POLLIN | POLLRDHUP;
 
     if (bind(socket_fd_, (sockaddr *)&addr_, sizeof(addr_)) < 0) {
         cout << errno << endl;
@@ -37,17 +40,25 @@ Socket::Socket(int domain, int type, int protocol, int port, int queue_size,
     if (listen(socket_fd_, queue_size) < 0) throw runtime_error("listen failed");
 }
 
-bool Socket::ready() {
+bool Socket::startListen() {
     // fds_[i]
-    while (stop) {
+    thread t(&Socket::passiveListen, this);
+    t.join();
+    return true;
+}
+
+void Socket::passiveListen() {
+    // signal(SIGINT, sigintHandler);
+    while (!stop) {
         cout << "waiting for request... (blocked)" << endl;
         int result = poll(fds_, current_size_ + 1, -1);
-        if (!stop) break;
+        if (stop) break;
         cout << "detect incoming request" << endl;
         if (result < 0) throw runtime_error("socket ready failed");
-        // if (result == 0) {
-        //     continue;
-        // }
+        if (result == 0) {
+            cout << "what the heck" << endl;
+            continue;
+        }
         if (fds_[0].revents &
             POLLIN) {  // there is incoming connection, add that to pds
             int client_socket_fd = accept(socket_fd_, NULL, NULL);
@@ -56,17 +67,16 @@ bool Socket::ready() {
                  ++i) {                 // find the appropriate place for the new socket
                 if (fds_[i].fd == 0) {  // found an unsed socket
                     fds_[i].fd = client_socket_fd;
-                    fds_[i].events = POLLIN;
+                    fds_[i].events = POLLIN | POLLRDHUP;
                     current_size_++;
                     cout << "accepted on socket index: " << i << endl;
                     break;
                 }
             }
         }
-        cout << fds_[0].revents << endl;
+        // for (int i = 0; i < client_size_; ++i) cout << "fds[" << i << "]: " << fds_[i].fd << ' ' << fds_[i].events << ' ' << fds_[i].revents << endl;
         for (int i = 1; i < client_size_; ++i) {
-            cout << fds_[i].revents << endl;
-            if (fds_[i].fd > 0 && fds_[i].revents & POLLIN) {
+            if (fds_[i].fd > 0 && fds_[i].revents & (POLLIN | POLLRDHUP)) {
                 cout << "connection from " << i << endl;
                 char buffer[1024];
                 int buffer_size = read(fds_[i].fd, buffer, 1024);
@@ -91,6 +101,4 @@ bool Socket::ready() {
         cout << "\n\n"
              << endl;
     }
-
-    return true;
 }

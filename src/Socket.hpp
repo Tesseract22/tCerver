@@ -1,7 +1,4 @@
 #pragma once
-
-#include <arpa/inet.h>  //close
-#include <errno.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
@@ -12,14 +9,15 @@
 #include <sys/types.h>
 #include <unistd.h>  //close
 
+#include <thread>
 #define DEFAULT_PORT 8080
 
 class Socket {
    public:
     Socket(int domain = AF_INET, int type = SOCK_STREAM, int protocol = 0,
-           int port = 8080, int queue_size = 3, int client_siz = 10);
+           int port = DEFAULT_PORT, int queue_size = 3, int client_size = 10);
     ~Socket();
-    bool ready();
+    bool startListen();
     static void cleanUp();
     static bool stop;
 
@@ -29,4 +27,7 @@ class Socket {
     int client_size_;
     int current_size_ = 1;
     pollfd *fds_;
+    std::thread listen_thread;
+    void passiveListen();
 };
+void sigintHandler(int dummpy);
