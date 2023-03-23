@@ -18,7 +18,7 @@ if(NOT WIN32)
 endif()
 
 # set entry points
-set(entries "server")
+set(entries "server" "queue_test")
 
 # Disable in-source builds (running "cmake ." in the project directory)
 # This is bad practice as it pollutes the project directory.
@@ -44,6 +44,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
 endif()
+ # pthread.h
 set(CMAKE_EXE_LINKER_FLAGS "-lpthread")
 
 # Specify C++ Standard.
@@ -65,6 +66,8 @@ set(entry_dir ${CMAKE_SOURCE_DIR}/entry)
 
 # Run CMakeLists in src_dir to build the stude  nt's code.
 add_subdirectory(${src_dir})
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 
 # Add the assignment entrypoints using our libs and src code.

@@ -1,33 +1,24 @@
 #pragma once
-#include <netinet/in.h>
-#include <poll.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>  //strlen
-#include <sys/socket.h>
-#include <sys/time.h>  //FD_SET, FD_ISSET, FD_ZERO macros
-#include <sys/types.h>
-#include <unistd.h>  //close
 
-#include <thread>
+#include <SocketBase.hpp>
 #define DEFAULT_PORT 8080
 
-class Socket {
-   public:
+class Socket : SocketBase {
+  public:
     Socket(int domain = AF_INET, int type = SOCK_STREAM, int protocol = 0,
-           int port = DEFAULT_PORT, int queue_size = 3, int client_size = 10);
+           int port = DEFAULT_PORT, int queue_size = 3);
     ~Socket();
     bool startListen();
-    static void cleanUp();
-    static bool stop;
+    bool stopListen();
+    int getClientsCount();
 
-   private:
-    int socket_fd_;
-    sockaddr_in addr_;
-    int client_size_;
-    int current_size_ = 1;
-    pollfd *fds_;
-    std::thread listen_thread;
+  private:
+    int epoll_fd_;
+    bool running_ = false;
     void passiveListen();
+    void startListen(int timeout);
+
+    void addClientSocket(int socket_fd);
+    void delClientSocket(int socket_fd);
 };
 void sigintHandler(int dummpy);
