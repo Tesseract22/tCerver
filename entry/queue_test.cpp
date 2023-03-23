@@ -1,38 +1,33 @@
 #include <MultiThreadQueue.hpp>
 #include <iostream>
+#include <thread>
+#include <unistd.h>
 
 using namespace std;
+MultiThreadQueue<int> q;
+
+void pull_print() {
+    sleep(1);
+    cout << std::this_thread::get_id() << ": " << q.pull() << endl;
+}
 int main() {
-    MultiThreadQueue<int> q;
-    q.push(0);
-    q.push(1);
-    q.push(2);
-    q.push(3);
-    q.push(4);
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
 
-    q.push(2);
-    q.push(3);
-    q.push(4);
-    q.push(2);
-    q.push(3);
-    q.push(4);
-    q.push(2);
-    q.push(3);
-    q.push(4);
-    q.push(2);
-    q.push(3);
-    q.push(4);
+    thread s[10];
+    for (int i = 0; i < 20; ++i) {
+        q.push(i);
+    }
 
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
-    cout << q.pull() << endl;
+    for (int i = 0; i < 10; ++i) {
+        thread t(pull_print);
+        s[i] = std::move(t);
+    }
 
+    for (int i = 20; i < 40; ++i) {
+        q.push(i);
+    }
+
+    for (int i = 0; i < 10; ++i) {
+        s[i].join();
+    }
     return 0;
 }

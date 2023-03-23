@@ -51,16 +51,20 @@ template <typename T> size_t MultiThreadQueue<T>::resize() {
 }
 
 template <typename T> void MultiThreadQueue<T>::push(const T &x) {
+    std::unique_lock<std::mutex> lock(m_);
     if (tail_ == size_) {
         // reshape
         // alloc more space
         resize();
     }
+    cond_.notify_one();
     data_[tail_++] = T(x); // using the copy constructor
 }
 
 template <typename T> T &MultiThreadQueue<T>::pull() {
-    if (top_ != tail_)
-        return data_[top_++];
-    throw "";
+    std::unique_lock<std::mutex> lock(m_);
+    while (top_ == tail_) {
+        cond_.wait(lock);
+    }
+    return data_[top_++];
 }
