@@ -1,4 +1,5 @@
 #include <SocketBase.hpp>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 
@@ -20,6 +21,12 @@ SocketBase::SocketBase(int domain, int type, int protocol, int port,
         throw runtime_error("listen failed");
 }
 
-SocketBase::~SocketBase() { close(socket_fd_); }
+SocketBase::~SocketBase() {
+    close(socket_fd_);
+    for (size_t i = 3; i < socket_vec_.size(); ++i) {
+        if (mutex_vec_[i] != NULL)
+            delete mutex_vec_[i];
+    }
+}
 
 int SocketBase::getClientsCount() { return socket_count_; }

@@ -1,21 +1,28 @@
 #include "Socket.hpp"
+#include "MultiThreadQueue.hpp"
 #include "SocketBase.hpp"
 
 #include <csignal>
+#include <cstddef>
 #include <fcntl.h>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
+#include <string>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 using namespace std;
 
 Socket::Socket(int domain, int type, int protocol, int port, int queue_size)
-    : SocketBase(domain, type, protocol, port, queue_size) {
+    : SocketBase(domain, type, protocol, port, queue_size), task_q_(true) {
     fcntl(socket_fd_, F_SETFL, O_NONBLOCK); // non blocking
 }
+
+Socket::~Socket() {}
 
 bool Socket::startListen() {
     // fds_[i]
@@ -46,7 +53,7 @@ void Socket::startListen(int timeout) {
 
     epoll_event revents[10];
 
-    vector<int> fds;
+    cout << "server started" << '\n';
     while (running_) {
         int num_event = epoll_wait(epoll_fd_, revents, 10, timeout);
         cout << "num_event: " << num_event << endl;
@@ -54,25 +61,36 @@ void Socket::startListen(int timeout) {
 
             for (int i = 0; i < num_event; ++i) {
                 cout << revents[i].events << " " << revents[i].data.fd << endl;
-                ;
-                if (revents[i].data.fd == socket_fd_) {
+                int socket_i = revents[i].data.fd;
+                if (socket_i == socket_fd_) {
                     int new_socket_fd = accept(socket_fd_, NULL, NULL);
                     if (new_socket_fd < 0)
                         throw runtime_error("failed to estblish new socket");
                     event.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
                     event.data.fd = new_socket_fd;
                     epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, new_socket_fd, &event);
-                    fds.push_back(new_socket_fd);
                     addClientSocket(new_socket_fd);
                 } else if (revents[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-                    delClientSocket(revents[i].data.fd);
-                    close(revents[i].data.fd);
-                } else if (revents[i].events & EPOLLIN) {
-                    if (read(revents[i].data.fd, buffer, buffer_size) > 0) {
-                        cout << buffer << endl;
+                    lockSocket(socket_i);
+                    int status;
+                    if ((status = getClientSocket(socket_i) & PendingRead)) {
+                        modClientSocket(socket_i, status |= PendingClose);
+                    } else {
+                        delClientSocket(socket_i);
                     }
 
-                    if (send(revents[i].data.fd,
+                    unlockSocket(socket_i);
+                } else if (revents[i].events & EPOLLIN) {
+                    // cout << __LINE__ << endl;
+                    // if (read(revents[i].data.fd, buffer, buffer_size) > 0) {
+                    //     cout << buffer << endl;
+                    // }
+                    // cout << __LINE__ << endl;
+                    lockSocket(socket_i);
+                    task_q_.push(socket_i);
+                    modClientSocket(socket_i, PendingRead);
+                    unlockSocket(socket_i);
+                    if (send(socket_i,
                              "HTTP/1.1 200 OK\nContent-Type: "
                              "text/plain\nContent-Length: "
                              "12\n\nHello world!",
@@ -88,7 +106,9 @@ void Socket::startListen(int timeout) {
 void Socket::addClientSocket(int socket_fd) {
     if ((size_t)socket_fd >= socket_vec_.size()) {
         socket_vec_.resize(socket_fd + 1);
+        mutex_vec_.resize(socket_fd + 1);
     }
+    mutex_vec_[socket_fd] = new mutex;
     socket_vec_[socket_fd] = 1;
     socket_count_++;
 }
@@ -97,11 +117,50 @@ void Socket::delClientSocket(int socket_fd) {
     if ((size_t)socket_fd >= socket_vec_.size()) {
         throw runtime_error("deleting non-existing socket");
     }
-    socket_vec_[socket_fd] = 1;
+    socket_vec_[socket_fd] = 0;
+    delete mutex_vec_[socket_fd];
+    mutex_vec_[socket_fd] = NULL;
+    close(socket_fd);
     socket_count_--;
 }
 
+void Socket::modClientSocket(int socket_fd, int act) {
+    if ((size_t)socket_fd >= socket_vec_.size()) {
+        throw runtime_error("modifying non-existing socket");
+    }
+    socket_vec_[socket_fd] = act;
+}
+
+int Socket::getClientSocket(int socket_fd) {
+    if ((size_t)socket_fd >= socket_vec_.size()) {
+        throw runtime_error("getting non-existing socket");
+    }
+    return socket_vec_[socket_fd];
+}
+
+int Socket::getTask() {
+    int *fd = task_q_.pull();
+    int res = *fd;
+    free(fd);
+    cout << "task: " << res << endl;
+    return res;
+}
+
 int Socket::getClientsCount() { return socket_count_; }
+
+void Socket::lockSocket(int socket_fd) {
+    if ((size_t)socket_fd >= mutex_vec_.size())
+        throw runtime_error("locking non-existing socket: " +
+                            to_string(socket_fd));
+    mutex_vec_[socket_fd]->lock();
+}
+
+void Socket::unlockSocket(int socket_fd) {
+    if ((size_t)socket_fd >= mutex_vec_.size())
+        throw runtime_error("unlocking non-existing socket:" +
+                            to_string(socket_fd));
+    mutex_vec_[socket_fd]->unlock();
+}
 
 void Socket::passiveListen() {
     // signal(SIGINT, sigintHandler);
