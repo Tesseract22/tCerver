@@ -7,7 +7,7 @@ using namespace std;
 static MultiThreadQueue<int> q(true);
 static int result[10];
 void pull_print(int i) {
-    sleep(1);
+    usleep(100);
     // cout << i << endl;
     int x = *(q.pull());
     result[i] = x;
@@ -21,9 +21,8 @@ int main() {
     }
 
     for (int i = 0; i < 10; ++i) {
-        thread t(pull_print, i);
-        cout << i << endl;
-        s[i] = std::move(t);
+
+        s[i] = thread(pull_print, i);
     }
 
     for (int i = 20; i < 40; ++i) {
