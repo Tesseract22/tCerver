@@ -4,8 +4,6 @@
 #include <TCPServer.hpp>
 #include <condition_variable>
 #include <cstddef>
-#include <cstdio>
-#include <cstring>
 #include <fcntl.h>
 #include <ostream>
 #include <sstream>
@@ -29,18 +27,24 @@ using namespace std;
 //     cout << resource_path_ << endl;
 // }
 
+TCPServer::~TCPServer() {
+    for (size_t i = 0; i < listen_threads_.size(); ++i)
+        listen_threads_[i].join();
+}
+
 TCPServer::TCPServer(size_t listen_threads, size_t parse_threads)
     : socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
       port_(DEFAULT_PORT),
+      task_q_(),
       listen_threads_(listen_threads),
       parse_threads_(parse_threads),
-      epolls_(vector<EPoll>(
-          listen_threads_.size(),
-          EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_))) {
+      epolls_(listen_threads_.size(),
+              EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_)) {
     // setting up the socket
-    if (listen_threads <= 1)
+    if (listen_threads < 1)
         throw runtime_error("threads number must be at least 1");
     addr_.sin_family = AF_INET;
+
     addr_.sin_addr.s_addr = INADDR_ANY;
     addr_.sin_port = htons(port_);
     int on = 1;
@@ -69,6 +73,9 @@ void TCPServer::startListen() {
     for (size_t i = 0; i < listen_threads_.size(); ++i) {
         listen_threads_[i] = thread(&EPoll::wait, &epolls_[i]);
     }
+    for (size_t i = 0; i < parse_threads_.size(); ++i) {
+        parse_threads_[i] = thread(&TCPServer::waitTask, this, i);
+    }
     running_ = true;
 }
 
@@ -79,30 +86,17 @@ void TCPServer::waitTask(size_t id) {
     while (running_) {
         Task *t = task_q_.pull();
         int socket_fd = t->socket_fd;
-        lockSocket(socket_fd);
-        int status = getStatus(socket_fd);
-        unlockSocket(socket_fd);
-        if (status & PendingRead) {
-            cout << "socket: " << socket_fd << endl;
-            // string *temp = new string(to_string(id) + "\n");
-            Task *t = new Task;
-            while ((read(socket_fd, buffer, buffer_size) > 0)) {
-                // parseRequest(buffer, socket_fd);
-                // cout << "read... " << t << endl;
-                // cout << *temp << endl;
-                t->task += string(buffer);
-                // cout << __LINE__ << endl;
-            }
-            // t->task += string(buffer);
-            task_q_.push(*t);
-            lockSocket(socket_fd);
-            status = getStatus(socket_fd);
-            if (status & PendingClose) {
-                delSocket(socket_fd);
-            } else {
-                modSocket(socket_fd, status & ~PendingRead);
-            }
-            unlockSocket(socket_fd);
+        char response[1024];
+        map<string, string> headers;
+        char *body_start = http_.parseRequest(t->task, response, headers);
+        if (body_start == NULL) {
+            continue;
         }
+        string &path = headers["path"];
+        try {
+            // http_
+        }
+
+        delete t;
     }
 }

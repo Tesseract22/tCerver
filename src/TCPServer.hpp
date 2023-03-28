@@ -21,7 +21,7 @@ class TCPServer {
     // TCPServer(std::ostream &log = std::cout, std::ostream &err = std::cerr);
     TCPServer(size_t listen_threads, size_t parse_threads);
     // TCPServer();
-    ~TCPServer() = default;
+    ~TCPServer();
     void startListen();
     void stopListen();
 
@@ -36,6 +36,9 @@ class TCPServer {
 
     void waitTask(size_t id);
 
+    void logRequest(const std::string &method, const std::string &url,
+                    const std::string &return_status);
+
   private:
     bool running_;
 
@@ -49,7 +52,7 @@ class TCPServer {
     sockaddr_in addr_;
     int port_;
 
-    MultiThreadQueue<Task> task_q_;
+    MultiThreadQueue<Task *> task_q_;
 
     // An array of threads listening to requests, we are not responsible for
     // allocating and deallocating this

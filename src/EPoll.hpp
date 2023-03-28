@@ -20,7 +20,7 @@ class EPoll {
   public:
     EPoll(std::mutex *m_, int master_socket_fd, std::vector<int> *sockt_vec,
           std::vector<std::mutex *> *mutex_vec,
-          MultiThreadQueue<Task> *task_q_);
+          MultiThreadQueue<Task *> *task_q_);
     EPoll(EPoll &&other);
     EPoll(const EPoll &X) = default;
     void addSocket(int socket_fd_);
@@ -42,5 +42,5 @@ class EPoll {
     // The value in the vector represent the status of the socket
     std::vector<int> *socket_vec_;
 
-    MultiThreadQueue<Task> *task_q_;
+    MultiThreadQueue<Task *> *task_q_;
 };

@@ -1,13 +1,15 @@
 #include "MultiThreadQueue.hpp"
 #include <EPoll.hpp>
+#include <fcntl.h>
 #include <iostream>
 #include <stdexcept>
 #include <sys/epoll.h>
 #include <thread>
 #include <unistd.h>
+
 using namespace std;
 EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
-             vector<mutex *> *mutex_vec, MultiThreadQueue<Task> *task_q)
+             vector<mutex *> *mutex_vec, MultiThreadQueue<Task *> *task_q)
     : m_(m),
       master_socket_fd_(master_socket_fd),
       mutex_vec_(mutex_vec),
@@ -38,7 +40,7 @@ void EPoll::wait() {
 
     epoll_event revents[10];
 
-    cout << "listing thread started" << '\n';
+    cout << "listening thread started" << '\n';
     while (true) {
         int num_event = epoll_wait(epoll_fd_, revents, 10, -1);
         cout << "num_event: " << num_event << endl;
@@ -71,17 +73,18 @@ void EPoll::wait() {
                     {
                         Task *t = new Task;
 
-                        while (read(socket_i, buffer, buffer_size) > 0) {
+                        while (read(socket_i, buffer, buffer_size) >= 0) {
                             t->task += string(buffer);
                         }
-                        t->task += string(buffer);
+                        buffer[buffer_size] = '\0';
                         lockSocket(socket_i);
-                        cout << "listening thread: task added" << endl;
-                        task_q_->push(*t);
+                        cout
+                            << "listening thread: task added, size of request: "
+                            << t->task.size() << endl;
+                        task_q_->push(t);
                         modSocket(socket_i, PendingRead);
                         unlockSocket(socket_i);
 
-                        cout << buffer << endl;
                         // if (send(socket_i,
                         //          "HTTP/1.1 200 OK\nContent-Type: "
                         //          "text/plain\nContent-Length: "
@@ -108,6 +111,8 @@ void EPoll::addSocket(int socket_fd) {
     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
     temp_event_.data.fd = socket_fd;
     epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_fd, &temp_event_);
+    // @important!
+    fcntl(socket_fd, F_SETFL, O_NONBLOCK);
     socket_vec_->operator[](socket_fd) = Open;
 }
 
