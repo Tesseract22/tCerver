@@ -43,16 +43,18 @@ void EPoll::wait() {
     cout << "listening thread started" << '\n';
     while (true) {
         int num_event = epoll_wait(epoll_fd_, revents, 10, -1);
-        cout << "num_event: " << num_event << endl;
+        // cout << "num_event: " << num_event << endl;
         if (num_event > 0) {
 
             for (int i = 0; i < num_event; ++i) {
-                cout << revents[i].events << " " << revents[i].data.fd << endl;
+                // cout << revents[i].events << " " << revents[i].data.fd <<
+                // endl;
                 int socket_i = revents[i].data.fd;
                 if (socket_i == master_socket_fd_) {
                     int new_socket_fd = accept(master_socket_fd_, NULL, NULL);
                     if (new_socket_fd < 0)
                         throw runtime_error("failed to estblish new socket");
+                    cout << "new socket established: " << new_socket_fd << endl;
                     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
                     temp_event_.data.fd = new_socket_fd;
                     m_->lock();
@@ -66,13 +68,14 @@ void EPoll::wait() {
                     } else {
                         delSocket(socket_i);
                     }
+                    cout << "socket closed: " << socket_i << endl;
                     unlockSocket(socket_i);
 
                 } else if (revents[i].events & EPOLLIN) {
 
                     {
                         Task *t = new Task;
-
+                        cout << "incoming request: " << socket_i << endl;
                         while (read(socket_i, buffer, buffer_size) >= 0) {
                             t->task += string(buffer);
                         }
@@ -81,6 +84,7 @@ void EPoll::wait() {
                         cout
                             << "listening thread: task added, size of request: "
                             << t->task.size() << endl;
+                        t->socket_fd = socket_i;
                         task_q_->push(t);
                         modSocket(socket_i, PendingRead);
                         unlockSocket(socket_i);

@@ -9,16 +9,15 @@ int utility::incrementParse(char const *str, char const *sep) {
     int start = 0;
     int curr = 0;
     while (*i) {
-
         if (*i == *sep_i) {
             if (sep_i == sep) {
                 start = curr;
             }
-
             sep_i++;
 
         } else if (*i == *sep) {
             sep_i = sep + 1;
+            start = curr;
         } else {
             sep_i = sep;
         }

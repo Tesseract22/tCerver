@@ -7,9 +7,10 @@ class HTTPUnit {
   public:
     HTTPUnit();
 
-    char *parseRequest(std::string &raw_request, char *response,
-                       std::map<std::string, std::string> &headers);
-    HTTP::HTTPResponse *parseUrl(const std::string &url);
+    std::pair<HTTP::HTTPRequest *, HTTP::HTTPResponse *>
+    parseRequest(std::string &raw_request);
+
+    std::string dispatchResponseHeaders(HTTP::HTTPResponse *response);
 
   private:
     char *parseHeader(std::string &raw_request,

@@ -1,15 +1,18 @@
 #include "EPoll.hpp"
+#include "HTTPResponse.hpp"
 #include "MultiThreadQueue.hpp"
 #include <HTTPUnit.hpp>
 #include <TCPServer.hpp>
 #include <condition_variable>
 #include <cstddef>
 #include <fcntl.h>
+#include <iostream>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <sys/sendfile.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <thread>
 #include <unistd.h>
@@ -32,8 +35,11 @@ TCPServer::~TCPServer() {
         listen_threads_[i].join();
 }
 
-TCPServer::TCPServer(size_t listen_threads, size_t parse_threads)
-    : socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
+TCPServer::TCPServer(size_t listen_threads, size_t parse_threads,
+                     ostream &log_io, ostream &err_io)
+    : log_io_(log_io),
+      err_io_(err_io),
+      socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
       port_(DEFAULT_PORT),
       task_q_(),
       listen_threads_(listen_threads),
@@ -86,17 +92,36 @@ void TCPServer::waitTask(size_t id) {
     while (running_) {
         Task *t = task_q_.pull();
         int socket_fd = t->socket_fd;
-        char response[1024];
-        map<string, string> headers;
-        char *body_start = http_.parseRequest(t->task, response, headers);
-        if (body_start == NULL) {
-            continue;
-        }
-        string &path = headers["path"];
-        try {
-            // http_
-        }
 
+        auto result = http_.parseRequest(t->task);
+        HTTP::HTTPRequest *request = result.first;
+        HTTP::HTTPResponse *response = result.second;
+        response->headers.insert({"Server", "tcever"}); // server information
+
+        string raw_response = http_.dispatchResponseHeaders(response);
+        int bytes =
+            send(socket_fd, raw_response.data(), raw_response.length(), 0);
+        if (response->type == HTTP::fail) {
+            // ???
+        } else if (response->type == HTTP::file) {
+            auto *file_response = (HTTP::HTTPResponseFile *)response;
+            if (file_response->fd > 0) {
+                bytes = sendfile(socket_fd, file_response->fd, NULL, 1024);
+                close(file_response->fd);
+            }
+        }
+        logRequest(request, response);
+        (void)bytes;
+        delete request;
+        delete response;
         delete t;
     }
+}
+
+void TCPServer::logRequest(HTTP::HTTPRequest *request,
+                           HTTP::HTTPResponse *response) {
+    log_io_ << request->path << ' ';
+    log_io_ << request->headers["method"] << ' ';
+    log_io_ << response->status << ' ';
+    log_io_ << endl;
 }

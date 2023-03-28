@@ -7,11 +7,18 @@
 typedef std::map<std::string, std::string> s_map_t;
 
 namespace HTTP {
+enum ResponseType {
+    fail = -1,
+    text = 0,
+    file = 1,
+};
 class HTTPResponse {
   public:
     s_map_t headers;
-    short status = 200;
+    std::string status = "200 OK";
     std::string http_ver = "HTTP/1.1";
+    ResponseType type = text;
+    char *body;
 };
 
 class HTTPRequest {
@@ -33,12 +40,15 @@ class HTTPResponseFile : public HTTPResponse {
   public:
     HTTPResponseFile() : HTTPResponse() {
         headers.insert({"Content-Type", "text/html; charset=utf-8"});
+        type = file;
     }
     std::string path_to_file;
     int fd = -1;
+    size_t file_size;
     // ~HTTPResponseFile() { close(fd); }
 };
 
 HTTPResponse *defaultPage(HTTPRequest *request);
-
+HTTPResponse *favIcon(HTTPRequest *request);
+HTTPResponse *defaultFileFounder(HTTPRequest *request);
 } // namespace HTTP

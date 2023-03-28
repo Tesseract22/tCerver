@@ -1,4 +1,5 @@
 #pragma once
+#include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include <EPoll.hpp>
 #include <MultiThreadQueue.hpp>
@@ -19,7 +20,9 @@
 class TCPServer {
   public:
     // TCPServer(std::ostream &log = std::cout, std::ostream &err = std::cerr);
-    TCPServer(size_t listen_threads, size_t parse_threads);
+    TCPServer(size_t listen_threads, size_t parse_threads,
+              std::ostream &log_io = std::cout,
+              std::ostream &err_io = std::cerr);
     // TCPServer();
     ~TCPServer();
     void startListen();
@@ -36,14 +39,13 @@ class TCPServer {
 
     void waitTask(size_t id);
 
-    void logRequest(const std::string &method, const std::string &url,
-                    const std::string &return_status);
+    void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
 
   private:
     bool running_;
 
-    std::ostream *log_io_;
-    std::ostream *err_io_;
+    std::ostream &log_io_;
+    std::ostream &err_io_;
 
     /**
       @new
