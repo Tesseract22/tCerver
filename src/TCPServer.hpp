@@ -20,8 +20,8 @@
 class TCPServer {
   public:
     // TCPServer(std::ostream &log = std::cout, std::ostream &err = std::cerr);
-    TCPServer(size_t listen_threads, size_t parse_threads,
-              std::ostream &log_io = std::cout,
+    TCPServer(HTTPUnit &&http, size_t listen_threads = 2,
+              size_t parse_threads = 2, std::ostream &log_io = std::cout,
               std::ostream &err_io = std::cerr);
     // TCPServer();
     ~TCPServer();

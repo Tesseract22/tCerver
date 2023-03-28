@@ -16,7 +16,7 @@ EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
       epoll_fd_(epoll_create(1)),
       socket_vec_(socket_vec),
       task_q_(task_q) {
-    temp_event_.events = EPOLLIN | EPOLLRDHUP;
+    temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
     temp_event_.data.fd = master_socket_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, master_socket_fd_, &temp_event_) <
         0)

@@ -3,8 +3,10 @@
 #include "MultiThreadQueue.hpp"
 #include <HTTPUnit.hpp>
 #include <TCPServer.hpp>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <ctime>
 #include <fcntl.h>
 #include <iostream>
 #include <ostream>
@@ -35,8 +37,9 @@ TCPServer::~TCPServer() {
         listen_threads_[i].join();
 }
 
-TCPServer::TCPServer(size_t listen_threads, size_t parse_threads,
-                     ostream &log_io, ostream &err_io)
+TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
+                     size_t parse_threads, ostream &log_io, ostream &err_io)
+
     : log_io_(log_io),
       err_io_(err_io),
       socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
@@ -45,7 +48,8 @@ TCPServer::TCPServer(size_t listen_threads, size_t parse_threads,
       listen_threads_(listen_threads),
       parse_threads_(parse_threads),
       epolls_(listen_threads_.size(),
-              EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_)) {
+              EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_)),
+      http_(http) {
     // setting up the socket
     if (listen_threads < 1)
         throw runtime_error("threads number must be at least 1");
@@ -106,7 +110,10 @@ void TCPServer::waitTask(size_t id) {
         } else if (response->type == HTTP::file) {
             auto *file_response = (HTTP::HTTPResponseFile *)response;
             if (file_response->fd > 0) {
-                bytes = sendfile(socket_fd, file_response->fd, NULL, 1024);
+                off_t offset = 0;
+                while ((bytes = sendfile(socket_fd, file_response->fd, &offset,
+                                         10240)) > 0) {
+                }
                 close(file_response->fd);
             }
         }
@@ -123,5 +130,7 @@ void TCPServer::logRequest(HTTP::HTTPRequest *request,
     log_io_ << request->path << ' ';
     log_io_ << request->headers["method"] << ' ';
     log_io_ << response->status << ' ';
+    auto now = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    log_io_ << ctime(&now);
     log_io_ << endl;
 }

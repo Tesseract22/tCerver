@@ -42,3 +42,10 @@ vector<string> utility::splitString(const string &str, const string &sep,
     }
     return res;
 }
+
+const char *utility::getFileExt(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename)
+        return "";
+    return dot;
+}
