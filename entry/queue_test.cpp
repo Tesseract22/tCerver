@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 using namespace std;
-static MultiThreadQueue<int> q(true);
+static MultiThreadQueue<int> q(false);
 static int result[10];
 void pull_print(int i) {
     usleep(100);
@@ -13,27 +13,12 @@ void pull_print(int i) {
     result[i] = x;
 }
 int main() {
+    int a = 0;
+    int b = 1;
+    int c = 2;
+    q.push(a);
+    q.push(b);
 
-    thread s[10];
-
-    for (int i = 0; i < 20; ++i) {
-        q.push(i);
-    }
-
-    for (int i = 0; i < 10; ++i) {
-
-        s[i] = thread(pull_print, i);
-    }
-
-    for (int i = 20; i < 40; ++i) {
-        q.push(i);
-    }
-    // cout << "\n\n";
-    // sleep(2);
-    for (int i = 0; i < 10; ++i) {
-        s[i].join();
-        cout << result[i] << endl;
-    }
-
+    cout << *q.pull() << endl;
     return 0;
 }

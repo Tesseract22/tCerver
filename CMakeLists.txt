@@ -18,7 +18,7 @@ if(NOT WIN32)
 endif()
 
 # set entry points
-set(entries "server" "queue_test")
+set(entries "server" "queue_test" "util_test")
 
 # Disable in-source builds (running "cmake ." in the project directory)
 # This is bad practice as it pollutes the project directory.
