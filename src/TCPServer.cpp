@@ -72,54 +72,6 @@ void TCPServer::startListen() {
     running_ = true;
 }
 
-// void TCPServer::parseRequest(char *str, int socket_fd) {
-//     int idx;
-//     if ((idx = utility::incrementParse(str, " ")) < 0)
-//         throw runtime_error("failed to parse");
-//     // [METHOD] [PATH] [REQUEST]
-
-//     // method
-//     str[idx] = '\0';
-//     cout << str << endl;
-//     str += idx + 1;
-//     if ((idx = utility::incrementParse(str, " ")) < 0)
-//         throw runtime_error("failed to parse");
-//     // path
-//     str[idx] = '\0';
-//     cout << str << endl;
-//     cout << strcmp(str, "/") << endl;
-//     if (strcmp(str, "/") == 0) {
-
-//         int fd = open("index.html", O_RDONLY);
-//         cout << "opening index: " << fd << endl;
-//         // fopen(const char *__restrict filename, const char *__restrict
-//         modes) off_t offset = 0; int btyes; while ((btyes =
-//         sendfile(socket_fd, fd, &offset, 1000)) > 0) {
-//             cout << "sending file to socket: " << socket_fd
-//                  << ", offset: " << offset << ", bytes sent: " << btyes <<
-//                  endl;
-//         }
-//         cout << btyes << endl;
-//         cout << "err: " << errno << endl;
-//     }
-//     str += idx + 1;
-//     if ((idx = utility::incrementParse(str, " ")) < 0)
-//         throw runtime_error("failed to parse");
-//     // request
-//     str[idx] = '\0';
-//     cout << str << endl;
-//     str += idx + 1;
-
-//     for (int i = 0; i < 5; ++i) {
-//         int idx = utility::incrementParse(str, "\n");
-//         if (idx < 0)
-//             break;
-//         str[idx] = '\0';
-//         cout << i << ": " << str << endl;
-//         str += idx + 1;
-//     }
-// }
-
 void TCPServer::waitTask(size_t id) {
     cout << this_thread::get_id() << " start fetching task..." << endl;
     char buffer[1025];

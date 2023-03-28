@@ -1,0 +1,44 @@
+#include <cstddef>
+#include <sys/types.h>
+#include <utilities.hpp>
+
+using namespace std;
+int utility::incrementParse(char *str, char const *sep) {
+    char *i = str;
+    char const *sep_i = sep;
+    int start = 0;
+    int curr = 0;
+    while (*i) {
+
+        if (*i == *sep_i) {
+            if (sep_i == sep)
+                start = curr;
+            sep_i++;
+
+        } else if (*i == *sep) {
+            sep_i = sep + 1;
+            start = curr;
+        } else {
+            sep_i = sep;
+        }
+        if (*sep_i == '\0') {
+            return start;
+        }
+        i++;
+        curr++;
+    }
+    return -1;
+}
+
+map<string, string> utility::parseHeader(const string &str) {
+    map<string, string> res;
+    return res;
+}
+
+vector<string> utility::splitByChar(const string &str, const string &sep,
+                                    ssize_t time) {
+    vector<string> res;
+    for (size_t i = 0; i < str.length(); ++i) {
+    }
+    return res;
+}
