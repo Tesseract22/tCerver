@@ -73,26 +73,24 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
     getcwd(resource_path_, 100);
 }
 
-// void TCPServer::startSocket() {
-//     master_socket_->lis
-// }
+void TCPServer::waitListen(size_t id) { epolls_[id].wait(); }
 
-void TCPServer::startListen() {
+void TCPServer::serverStart() {
 
     // socket_thread_ = thread(&SocketBase::startListen, master_socket_);
     for (size_t i = 0; i < listen_threads_.size(); ++i) {
-        listen_threads_[i] = thread(&EPoll::wait, &epolls_[i]);
+        listen_threads_[i] = thread(&TCPServer::waitListen, this, i);
     }
     for (size_t i = 0; i < parse_threads_.size(); ++i) {
-        parse_threads_[i] = thread(&TCPServer::waitTask, this, i);
+        parse_threads_[i] = thread(&TCPServer::waitParse, this, i);
     }
     running_ = true;
 }
 
-void TCPServer::waitTask(size_t id) {
+void TCPServer::waitParse(size_t id) {
+#if DEBUG
     cout << this_thread::get_id() << " start fetching task..." << endl;
-    char buffer[1025];
-    int buffer_size = 1024;
+#endif
     while (running_) {
         Task *t = task_q_.pull();
         int socket_fd = t->socket_fd;

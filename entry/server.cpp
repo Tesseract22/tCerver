@@ -13,6 +13,6 @@ int main(int argc, char *argv[]) {
     f << "sever start" << endl;
     HTTPUnit http;
     TCPServer server(std::move(http), 2, 2, f);
-    server.startListen();
+    server.serverStart();
     // signal(SIGINT, sigintHandler);
 }

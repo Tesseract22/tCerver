@@ -3,3 +3,4 @@ build/
 .clang-format
 .cache
 logs/logs.txt
+resource/

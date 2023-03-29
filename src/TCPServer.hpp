@@ -25,23 +25,16 @@ class TCPServer {
               std::ostream &err_io = std::cerr);
     // TCPServer();
     ~TCPServer();
-    void startListen();
-    void stopListen();
-
-    void lockSocket(int socket_fd) { epolls_[0].lockSocket(socket_fd); }
-    void unlockSocket(int socket_fd) { epolls_[0].unlockSocket(socket_fd); }
-
-    int getStatus(int socket_fd) { return sockets_[socket_fd]; }
-    void modSocket(int socket_fd, int act) {
-        epolls_[0].modSocket(socket_fd, act);
-    }
-    void delSocket(int socket_fd) { epolls_[0].delSocket(socket_fd); }
-
-    void waitTask(size_t id);
+    void serverStart();
+    void serverStop();
 
     void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
 
+    // void startPoll
+
   private:
+    void waitParse(size_t id);
+    void waitListen(size_t id);
     bool running_;
 
     std::ostream &log_io_;

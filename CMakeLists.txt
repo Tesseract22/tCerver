@@ -19,7 +19,7 @@ endif()
 
 # set entry points
 set(entries "server" "queue_test" "util_test")
-
+set(release_entries "server")
 # Disable in-source builds (running "cmake ." in the project directory)
 # This is bad practice as it pollutes the project directory.
 # See: https://dpiepgrass.medium.com/cmake-fights-against-disabling-in-source-builds-ab1d71c1d26f
@@ -45,14 +45,14 @@ else()
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
 endif()
  # pthread.h
-set(CMAKE_EXE_LINKER_FLAGS "-lpthread")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
 
 # Specify C++ Standard.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Specify warnings for all builds.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Werror -Wfatal-errors -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Werror -Wfatal-errors -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function ")
 
 # Path definitions.
 # set(lib_dir ${CMAKE_SOURCE_DIR}/lib)
@@ -74,4 +74,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 foreach(entrypoint IN LISTS entries)
     add_executable(${entrypoint} ${entry_dir}/${entrypoint}.cpp)
     target_link_libraries(${entrypoint} PRIVATE src)
+    target_compile_options(${entrypoint} PRIVATE -g -DDEBUG=1)
+endforeach()
+
+foreach(entrypoint IN LISTS release_entries)
+    add_executable(${entrypoint}-release ${entry_dir}/${entrypoint}.cpp)
+    target_link_libraries(${entrypoint}-release PRIVATE src)
+    target_compile_options(${entrypoint}-release PRIVATE -O3)
 endforeach()
