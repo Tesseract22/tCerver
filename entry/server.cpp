@@ -9,10 +9,11 @@
 
 using namespace std;
 int main(int argc, char *argv[]) {
+
     auto f = fstream("../logs/logs.txt");
     f << "sever start" << endl;
     HTTPUnit http;
-    TCPServer server(std::move(http), 2, 2, f);
+    TCPServer server(std::move(http), 10, 10, f);
     server.serverStart();
     // signal(SIGINT, sigintHandler);
 }

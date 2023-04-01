@@ -4,12 +4,12 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <string_view>
 #include <sys/stat.h>
 #include <utilities.hpp>
 using namespace std;
 HTTPUnit::HTTPUnit() {
     url_map_.insert({"/", &HTTP::defaultPage});
-    url_map_.insert({"/favicon.ico", &HTTP::favIcon});
     url_map_.insert({"_default_file_", &HTTP::defaultFileFounder});
 }
 
@@ -20,35 +20,32 @@ HTTPUnit::parseRequest(string &raw_request) {
     try {
         body_start = parseHeader(raw_request, request->headers);
     } catch (const runtime_error &e) {
-        // raw_request += "HTTP/1.1 304 OK\n\nFail";
         cout << e.what() << endl;
-        return {request, new HTTP::HTTPResponse};
+        return {request, HTTP::notFoundHandler(request)};
     }
     (void)body_start; // use body
 
-    string &path = request->headers["path"];
-    auto api_iter = url_map_.find(path);
+    string_view path = request->headers["path"];
+    auto api_iter = url_map_.find(path.data());
     request->path = path.data();
     struct stat buffer;
-    if (stat(request->path + 1, &buffer) == 0) {
+    if (stat(request->path.data() + 1, &buffer) == 0) {
         auto func = url_map_.at("_default_file_");
         auto response = func(request);
-        raw_request += dispatchResponseHeaders(response);
         HTTP::ResponseType type = response->type;
         return {request, response};
     }
     if (api_iter != url_map_.end()) {
         auto func = api_iter->second;
         auto response = func(request);
-        raw_request += dispatchResponseHeaders(response);
         HTTP::ResponseType type = response->type;
         return {request, response};
     } else {
-        throw runtime_error("to be implement");
+        return {request, HTTP::notFoundHandler(request)};
     }
 }
-
-char *HTTPUnit::parseHeader(string &raw_request, map<string, string> &headers) {
+char *HTTPUnit::parseHeader(string &raw_request,
+                            map<string_view, string_view> &headers) {
     char *c_str = raw_request.data();
     int idx;
     // method
@@ -72,7 +69,7 @@ char *HTTPUnit::parseHeader(string &raw_request, map<string, string> &headers) {
 
     // parse the rest of the header
     while (idx != -1) { // err code
-                        // seperate each line
+        // seperate each line
 
         if ((idx = utility::incrementParse(c_str, "\n")) < 0)
             throw runtime_error("header has incorrect format, header key");

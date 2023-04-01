@@ -14,7 +14,7 @@ class HTTPUnit {
 
   private:
     char *parseHeader(std::string &raw_request,
-                      std::map<std::string, std::string> &headers);
+                      std::map<std::string_view, std::string_view> &headers);
 
     std::map<std::string,
              std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)>>

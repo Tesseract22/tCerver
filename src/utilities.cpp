@@ -49,3 +49,5 @@ const char *utility::getFileExt(const char *filename) {
         return "";
     return dot;
 }
+
+void utility::sigintHandler(int dummy) { std::cerr << "test sign" << endl; }

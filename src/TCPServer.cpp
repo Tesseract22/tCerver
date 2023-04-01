@@ -5,6 +5,7 @@
 #include <TCPServer.hpp>
 #include <chrono>
 #include <condition_variable>
+#include <csignal>
 #include <cstddef>
 #include <ctime>
 #include <fcntl.h>
@@ -35,6 +36,8 @@ using namespace std;
 TCPServer::~TCPServer() {
     for (size_t i = 0; i < listen_threads_.size(); ++i)
         listen_threads_[i].join();
+    for (size_t i = 0; i < parse_threads_.size(); ++i)
+        parse_threads_[i].join();
 }
 
 TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
@@ -71,21 +74,34 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
 
     chdir("../resource");
     getcwd(resource_path_, 100);
+
+    // std::signal(SIGINT, utility::sigintHandler);
 }
 
-void TCPServer::waitListen(size_t id) { epolls_[id].wait(); }
+void TCPServer::waitListen(size_t id) {
+    while (running_) {
+        try {
+            epolls_[id].wait();
+        } catch (SocketException &e) {
+            err_io_ << e.what() << endl;
+        }
+    }
+}
 
 void TCPServer::serverStart() {
 
     // socket_thread_ = thread(&SocketBase::startListen, master_socket_);
+    running_ = true;
     for (size_t i = 0; i < listen_threads_.size(); ++i) {
         listen_threads_[i] = thread(&TCPServer::waitListen, this, i);
     }
     for (size_t i = 0; i < parse_threads_.size(); ++i) {
         parse_threads_[i] = thread(&TCPServer::waitParse, this, i);
     }
-    running_ = true;
+    cout << "server started" << endl;
 }
+
+void TCPServer::serverStop() { running_ = false; }
 
 void TCPServer::waitParse(size_t id) {
 #if DEBUG
@@ -94,29 +110,23 @@ void TCPServer::waitParse(size_t id) {
     while (running_) {
         Task *t = task_q_.pull();
         int socket_fd = t->socket_fd;
-
         auto result = http_.parseRequest(t->task);
         HTTP::HTTPRequest *request = result.first;
         HTTP::HTTPResponse *response = result.second;
-        response->headers.insert({"Server", "tcever"}); // server information
+        response->headers.insert({"Server", "tcerver"}); // server information
 
         string raw_response = http_.dispatchResponseHeaders(response);
-        int bytes =
-            send(socket_fd, raw_response.data(), raw_response.length(), 0);
-        if (response->type == HTTP::fail) {
-            // ???
-        } else if (response->type == HTTP::file) {
-            auto *file_response = (HTTP::HTTPResponseFile *)response;
-            if (file_response->fd > 0) {
-                off_t offset = 0;
-                while ((bytes = sendfile(socket_fd, file_response->fd, &offset,
-                                         10240)) > 0) {
-                }
-                close(file_response->fd);
-            }
+        // cout << raw_response << endl;
+        int bytes = 0;
+        size_t total_bytes = 0;
+        while (total_bytes < raw_response.length()) {
+            if ((bytes = send(socket_fd, raw_response.data(),
+                              raw_response.length(), 0)) <= 0)
+                break;
+            total_bytes += bytes;
         }
-        logRequest(request, response);
-        (void)bytes;
+        response->sendData(socket_fd);
+        // logRequest(request, response);
         delete request;
         delete response;
         delete t;

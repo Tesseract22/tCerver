@@ -2,6 +2,10 @@
 #include <fcntl.h>
 #include <map>
 #include <string>
+#include <string_view>
+#include <sys/sendfile.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <unordered_map>
 typedef std::map<std::string, std::string> s_map_t;
@@ -18,22 +22,39 @@ class HTTPResponse {
     std::string status = "200 OK";
     std::string http_ver = "HTTP/1.1";
     ResponseType type = text;
-    char *body;
+    virtual int sendData(int socket_fd) = 0;
+    virtual ~HTTPResponse() {}
 };
-
 class HTTPRequest {
   public:
     HTTPRequest() = default;
-    HTTPRequest(char *path_arg, s_map_t header_arg, s_map_t args_arg,
+    HTTPRequest(char *path_arg,
+                std::map<std::string_view, std::string_view> header_arg,
+                std::map<std::string_view, std::string_view> args_arg,
                 char *body_arg)
         : path(path_arg), headers(header_arg), args(args_arg), body(body_arg) {}
-    char *path;
-    s_map_t headers;
-    s_map_t args;
-    char *body;
+    std::string path;
+    std::map<std::string_view, std::string_view> headers;
+    std::map<std::string_view, std::string_view> args;
+    const char *body;
 };
 
-class HTTPResponseText : public HTTPResponse {};
+class HTTPResponseText : public HTTPResponse {
+  public:
+    HTTPResponseText() : HTTPResponse() {
+        type = text;
+        headers.insert({"Content-Type", "text/plain"});
+    }
+    std::string body;
+    int sendData(int socket_fd) {
+        int bytes = 0;
+        int total = 0;
+        while ((bytes = send(socket_fd, body.data(), body.length(), 0)) > 0) {
+            total += bytes;
+        }
+        return total;
+    }
+};
 
 class HTTPResponseFile : public HTTPResponse {
 
@@ -42,12 +63,21 @@ class HTTPResponseFile : public HTTPResponse {
     std::string path_to_file;
     int fd = -1;
     size_t file_size;
+    int sendData(int socket_fd) {
+        off_t offset = 0;
+        int bytes = 0;
+        int total = 0;
+        while ((bytes = (sendfile(socket_fd, fd, &offset, 10240))) > 0) {
+            total += bytes;
+        }
+        return total;
+    }
     // ~HTTPResponseFile() { close(fd); }
 };
 
 HTTPResponse *defaultPage(HTTPRequest *request);
-HTTPResponse *favIcon(HTTPRequest *request);
 HTTPResponse *defaultFileFounder(HTTPRequest *request);
+HTTPResponse *notFoundHandler(HTTPRequest *request);
 
 const static std::unordered_map<std::string, std::string> g_mime_type_map = {
     {".aac", "audio/aac"},
@@ -65,8 +95,8 @@ const static std::unordered_map<std::string, std::string> g_mime_type_map = {
     {".css", "text/css"},
     {".csv", "text/csv"},
     {".doc", "application/msword"},
-    {".docx",
-     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    {".docx", "application/"
+              "vnd.openxmlformats-officedocument.wordprocessingml.document"},
     {".eot", "application/vnd.ms-fontobject"},
     {".epub", "application/epub+zip"},
     {".gz", "application/gzip"},
@@ -121,8 +151,8 @@ const static std::unordered_map<std::string, std::string> g_mime_type_map = {
     {".woff2", "font/woff2"},
     {".xhtml", "application/xhtml+xml"},
     {".xls", "application/vnd.ms-excel"},
-    {".xlsx",
-     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    {".xlsx", "application/"
+              "vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     {".xml", "application/xml"},
     {".xul", "application/vnd.mozilla.xul+xml"},
     {".zip", "application/zip"},
