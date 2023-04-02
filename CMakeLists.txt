@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(RayTracer)
+project(tcerver)
 
 # Add color support to our messages.
 # See: https://stackoverflow.com/questions/18968979/how-to-get-colorized-output-with-cmake
@@ -44,11 +44,12 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
 endif()
+# set(CMAKE_CXX_COMPILER "/usr/bin/g++")
  # pthread.h
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
 
 # Specify C++ Standard.
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Specify warnings for all builds.
@@ -78,8 +79,18 @@ foreach(entrypoint IN LISTS entries)
     target_compile_definitions(${entrypoint} PUBLIC DEBUG=1)
 endforeach()
 
+# release build
 foreach(entrypoint IN LISTS release_entries)
     add_executable(${entrypoint}-release ${entry_dir}/${entrypoint}.cpp)
     target_link_libraries(${entrypoint}-release PRIVATE src)
     target_compile_options(${entrypoint}-release PRIVATE -O3)
 endforeach()
+
+# testcases
+add_executable("test" ${tests_dir}/test.cpp)
+target_link_libraries("test" PRIVATE src)
+
+# creating the static library
+ADD_LIBRARY(tcerver STATIC
+             src/EPoll.cpp src/HTTPResponse.cpp src/HTTPUnit.cpp src/TCPServer.cpp src/MultiThreadQueue.hpp src/utilities.cpp)
+set_target_properties(tcerver PROPERTIES LINKER_LANGUAGE CXX)

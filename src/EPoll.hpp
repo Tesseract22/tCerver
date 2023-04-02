@@ -1,5 +1,6 @@
 #pragma once
-#include <MultiThreadQueue.hpp>
+#include "MultiThreadQueue.hpp"
+#include <cstddef>
 #include <exception>
 #include <mutex>
 #include <stdexcept>
@@ -36,10 +37,12 @@ class EPoll {
     EPoll(std::mutex *m_, int master_socket_fd, std::vector<int> *sockt_vec,
           std::vector<std::mutex *> *mutex_vec,
           MultiThreadQueue<Task *> *task_q_);
-    EPoll(EPoll &&other);
+    EPoll(EPoll &&other) noexcept;
     EPoll(const EPoll &X) = default;
+    ~EPoll();
 
-    void wait();
+    void wait(int dummy_fd);
+    void stop();
 
   private:
     void addSocket(int socket_fd_);
@@ -50,14 +53,15 @@ class EPoll {
     void lockSocket(int socket_fd);
     void unlockSocket(int socket_fd);
 
-    std::mutex *m_;
+    std::mutex *m_ = NULL;
     int master_socket_fd_;
-    std::vector<std::mutex *> *mutex_vec_;
+    std::vector<std::mutex *> *mutex_vec_ = NULL;
     int epoll_fd_;
     epoll_event temp_event_;
+    bool running_ = false;
     // The socket file descriptor is directly used as indexes
     // The value in the vector represent the status of the socket
-    std::vector<int> *socket_vec_;
+    std::vector<int> *socket_vec_ = NULL;
 
-    MultiThreadQueue<Task *> *task_q_;
+    MultiThreadQueue<Task *> *task_q_ = NULL;
 };

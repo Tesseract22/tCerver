@@ -12,7 +12,7 @@ template <typename T> class MultiThreadQueue {
     MultiThreadQueue();
     ~MultiThreadQueue();
     T &pull();
-    void push(T &x);
+    void push(const T &x);
     // void debug() {
 
     // }
@@ -58,14 +58,14 @@ template <typename T> size_t MultiThreadQueue<T>::resize() {
     return size_;
 }
 
-template <typename T> void MultiThreadQueue<T>::push(T &x) {
+template <typename T> void MultiThreadQueue<T>::push(const T &x) {
     std::unique_lock<std::mutex> lock(m_);
     if (size_ == curr_size_) {
         // reshape
         // alloc more space
         resize();
     }
-    data_[tail_++] = x;
+    data_[tail_++] = T(x);
     tail_ %= size_;
     curr_size_++;
     cond_.notify_all();

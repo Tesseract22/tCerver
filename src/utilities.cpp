@@ -1,7 +1,7 @@
+#include "utilities.hpp"
 #include <cstddef>
 #include <iostream>
 #include <sys/types.h>
-#include <utilities.hpp>
 using namespace std;
 int utility::incrementParse(char const *str, char const *sep) {
     char const *i = str;

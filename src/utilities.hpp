@@ -14,4 +14,4 @@ std::vector<std::string> splitString(const std::string &str,
 const char *getFileExt(const char *filename);
 
 void sigintHandler(int dummy);
-}; // namespace utility
+} // namespace utility

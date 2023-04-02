@@ -1,9 +1,11 @@
 #pragma once
+#include "EPoll.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
-#include <EPoll.hpp>
-#include <MultiThreadQueue.hpp>
+#include "MultiThreadQueue.hpp"
+
 #include <condition_variable>
+#include <cstddef>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -15,7 +17,7 @@
 #include <thread>
 #include <vector>
 // TCP server implementation
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 80
 
 class TCPServer {
   public:
@@ -29,10 +31,17 @@ class TCPServer {
     void serverStop();
 
     void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
-
+    void static sigintHandler(int dummy);
     // void startPoll
 
   private:
+    // static std::vector<int> stop_fds_;
+    // static std::vector<EPoll *> stop_epolls_;
+    // static std::vector<std::pair<MultiThreadQueue<Task *> *, size_t>>
+    // stop_qs_;
+    static std::vector<TCPServer *> servers_;
+    int stop_pipe_[2];
+
     void waitParse(size_t id);
     void waitListen(size_t id);
     bool running_;
@@ -53,14 +62,12 @@ class TCPServer {
     // allocating and deallocating this
     std::vector<std::thread> listen_threads_;
     std::vector<std::thread> parse_threads_;
-    // Any array of EPoll object. Each one correspond to one listen_threads_;
-
-    std::vector<EPoll> epolls_;
 
     std::vector<int> sockets_;
     std::vector<std::mutex *> mutexes_;
-
     std::mutex epoll_m_;
+    // Any array of EPoll object. Each one correspond to one listen_threads_;
+    std::vector<EPoll> epolls_;
 
     HTTPUnit http_;
 

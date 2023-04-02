@@ -1,5 +1,8 @@
+#include "EPoll.hpp"
 #include "MultiThreadQueue.hpp"
-#include <EPoll.hpp>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <stdexcept>
@@ -8,6 +11,17 @@
 #include <unistd.h>
 
 using namespace std;
+EPoll::~EPoll() {
+    if (mutex_vec_) {
+        for (auto &p : *mutex_vec_) {
+            if (p)
+                delete p;
+        }
+    }
+}
+
+void EPoll::stop() { running_ = false; }
+
 EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
              vector<mutex *> *mutex_vec, MultiThreadQueue<Task *> *task_q)
     : m_(m),
@@ -16,6 +30,7 @@ EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
       epoll_fd_(epoll_create(1)),
       socket_vec_(socket_vec),
       task_q_(task_q) {
+    memset(&temp_event_, 0, sizeof(epoll_event));
     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
     temp_event_.data.fd = master_socket_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, master_socket_fd_, &temp_event_) <
@@ -23,27 +38,47 @@ EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
         throw runtime_error("failed to add socket to epoll");
 }
 
-EPoll::EPoll(EPoll &&other) {
-    other.m_ = m_;
-    other.master_socket_fd_ = other.master_socket_fd_;
-    other.mutex_vec_ = mutex_vec_;
-    other.epoll_fd_ = epoll_fd_;
-    other.temp_event_.events = temp_event_.events;
-    other.temp_event_.data = temp_event_.data;
-    other.socket_vec_ = socket_vec_;
-    other.task_q_ = task_q_;
+EPoll::EPoll(EPoll &&other) noexcept {
+    m_ = other.m_;
+    master_socket_fd_ = other.master_socket_fd_;
+    epoll_fd_ = other.epoll_fd_;
+    temp_event_.events = other.temp_event_.events;
+    temp_event_.data = other.temp_event_.data;
+    mutex_vec_ = other.mutex_vec_;
+    socket_vec_ = other.socket_vec_;
+    task_q_ = other.task_q_;
+
+    other.mutex_vec_ = NULL;
+    other.socket_vec_ = NULL;
+    other.task_q_ = NULL;
 }
 
-void EPoll::wait() {
+void EPoll::wait(int dummpy_fd) {
+    running_ = true;
     char buffer[1025];
     int buffer_size = 1024;
+    memset(buffer, 0, 1025);
 
-    epoll_event revents[10];
+    epoll_event revents[20];
 #if DEBUG
     cout << "listening thread started" << '\n';
 #endif
+    temp_event_.events = EPOLLIN;
+    temp_event_.data.fd = dummpy_fd;
+    if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, dummpy_fd, &temp_event_) < 0) {
+        cout << errno << endl;
+        throw runtime_error("failed to add dummy fd to epoll");
+    }
+
     while (true) {
-        int num_event = epoll_wait(epoll_fd_, revents, 10, -1);
+        int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
+        if (!running_) {
+            return;
+        }
+        if (num_event < 0) {
+            throw SocketException("epoll_wait failed, retrying");
+        }
+        int bytes;
         if (num_event > 0) {
             for (int i = 0; i < num_event; ++i) {
                 int socket_i = revents[i].data.fd;
@@ -77,20 +112,13 @@ void EPoll::wait() {
 
                     {
                         Task *t = new Task;
-
-                        // cout << "incoming request: " << socket_i << endl;
-
-                        while (read(socket_i, buffer, buffer_size) >= 0) {
+                        while ((bytes = read(socket_i, buffer, buffer_size)) >=
+                               0) {
+                            buffer[bytes] = '\n';
                             t->task += string(buffer);
                         }
                         buffer[buffer_size] = '\0';
                         lockSocket(socket_i);
-
-                        // cout
-                        //     << "listening thread: task added, size of
-                        //     request: "
-                        //     << t->task.size() << endl;
-
                         t->socket_fd = socket_i;
                         task_q_->push(t);
                         modSocket(socket_i, PendingRead);

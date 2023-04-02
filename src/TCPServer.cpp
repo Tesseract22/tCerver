@@ -1,17 +1,17 @@
+#include "TCPServer.hpp"
 #include "EPoll.hpp"
 #include "HTTPResponse.hpp"
+#include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
-#include <HTTPUnit.hpp>
-#include <TCPServer.hpp>
+#include "utilities.hpp"
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstddef>
 #include <ctime>
+#include <exception>
 #include <fcntl.h>
 #include <iostream>
-#include <ostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <sys/sendfile.h>
@@ -19,7 +19,7 @@
 #include <sys/types.h>
 #include <thread>
 #include <unistd.h>
-#include <utilities.hpp>
+#include <utility>
 #include <vector>
 using namespace std;
 
@@ -33,6 +33,11 @@ using namespace std;
 //     cout << resource_path_ << endl;
 // }
 
+// std::vector<int> TCPServer::stop_fds_;
+// std::vector<EPoll *> TCPServer::stop_epolls_;
+// std::vector<std::pair<MultiThreadQueue<Task *> *, size_t>>
+// TCPServer::stop_qs_;
+std::vector<TCPServer *> TCPServer::servers_;
 TCPServer::~TCPServer() {
     for (size_t i = 0; i < listen_threads_.size(); ++i)
         listen_threads_[i].join();
@@ -50,8 +55,11 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
       task_q_(),
       listen_threads_(listen_threads),
       parse_threads_(parse_threads),
+      mutexes_(),
       epolls_(listen_threads_.size(),
-              EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_)),
+              std::move(EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_,
+                              &task_q_))),
+
       http_(http) {
     // setting up the socket
     if (listen_threads < 1)
@@ -74,17 +82,32 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
 
     chdir("../resource");
     getcwd(resource_path_, 100);
+    pipe(stop_pipe_);
+    servers_.push_back(this);
+}
 
-    // std::signal(SIGINT, utility::sigintHandler);
+void TCPServer::sigintHandler(int dummpy) {
+    char temp[4] = "end";
+    for (auto server : servers_) {
+        server->running_ = false;
+        for (auto &e : server->epolls_) {
+            e.stop();
+            write(server->stop_pipe_[1], temp, 4);
+        }
+
+        for (size_t i = 0; i < server->parse_threads_.size(); ++i) {
+            server->task_q_.push(NULL);
+        }
+    }
 }
 
 void TCPServer::waitListen(size_t id) {
-    while (running_) {
-        try {
-            epolls_[id].wait();
-        } catch (SocketException &e) {
-            err_io_ << e.what() << endl;
-        }
+
+    try {
+        epolls_[id].wait(stop_pipe_[0]);
+    } catch (SocketException &e) {
+        err_io_ << e.what() << endl;
+        waitListen(id);
     }
 }
 
@@ -98,6 +121,7 @@ void TCPServer::serverStart() {
     for (size_t i = 0; i < parse_threads_.size(); ++i) {
         parse_threads_[i] = thread(&TCPServer::waitParse, this, i);
     }
+
     cout << "server started" << endl;
 }
 
@@ -107,8 +131,12 @@ void TCPServer::waitParse(size_t id) {
 #if DEBUG
     cout << this_thread::get_id() << " start fetching task..." << endl;
 #endif
-    while (running_) {
+    while (true) {
         Task *t = task_q_.pull();
+        if (t == NULL) {
+            return;
+        }
+
         int socket_fd = t->socket_fd;
         auto result = http_.parseRequest(t->task);
         HTTP::HTTPRequest *request = result.first;
@@ -116,7 +144,7 @@ void TCPServer::waitParse(size_t id) {
         response->headers.insert({"Server", "tcerver"}); // server information
 
         string raw_response = http_.dispatchResponseHeaders(response);
-        // cout << raw_response << endl;
+        cout << raw_response << endl;
         int bytes = 0;
         size_t total_bytes = 0;
         while (total_bytes < raw_response.length()) {
