@@ -29,24 +29,27 @@ if ("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
     "${ColorBold}Delete `CMakeCache.txt` and `CMakeFiles/` before you continue.${ColorReset}")
 endif()
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 
 # Specify C++ compiler and linker.
-if(NOT DEFINED EWS)
-    set(CMAKE_C_COMPILER "/usr/bin/clang")
-    set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
-    set(CMAKE_LINKER "/usr/bin/clang++")
-else()
-    set(CMAKE_C_COMPILER "/software/llvm-6.0.1/bin/clang")
-    set(CMAKE_CXX_COMPILER "/software/llvm-6.0.1/bin/clang++")
-    set(CMAKE_LINKER "/software/llvm-6.0.1/bin/clang++")
+# if(NOT DEFINED EWS)
+#     set(CMAKE_C_COMPILER "/usr/bin/clang")
+#     set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+#     set(CMAKE_LINKER "/usr/bin/clang++")
+# else()
+#     set(CMAKE_C_COMPILER "/software/llvm-6.0.1/bin/clang")
+#     set(CMAKE_CXX_COMPILER "/software/llvm-6.0.1/bin/clang++")
+#     set(CMAKE_LINKER "/software/llvm-6.0.1/bin/clang++")
 
-    # Add other required flags for EWS.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
-endif()
-# set(CMAKE_CXX_COMPILER "/usr/bin/g++")
+#     # Add other required flags for EWS.
+
+# endif()
+set(CMAKE_CXX_COMPILER "/usr/bin/g++-10")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++2a -fcoroutines")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -std=c++2a")
  # pthread.h
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
 
 # Specify C++ Standard.
 set(CMAKE_CXX_STANDARD 20)
