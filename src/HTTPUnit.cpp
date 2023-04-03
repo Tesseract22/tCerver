@@ -115,4 +115,10 @@ string HTTPUnit::dispatchResponseHeaders(HTTP::HTTPResponse *response) {
     res += '\n';
     return res;
 }
-// HTTP::HTTPResponse *HTTPUnit::parseUrl(const string &url) {}
+
+void HTTPUnit::bindUrl(
+    const std::string &url,
+    const std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> &func) {
+
+    url_map_.insert({url, func});
+}

@@ -1,5 +1,4 @@
 #pragma once
-#include "EPoll.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
@@ -14,6 +13,7 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <sys/epoll.h>
 #include <thread>
 #include <vector>
 // TCP server implementation
@@ -56,7 +56,6 @@ class TCPServer {
     class EPoll {
       public:
         EPoll(std::mutex *m_, int master_socket_fd, std::vector<int> *sockt_vec,
-              std::vector<std::mutex *> *mutex_vec,
               MultiThreadQueue<Task *> *task_q_);
         EPoll(EPoll &&other) noexcept;
         EPoll(const EPoll &X) = delete;
@@ -71,12 +70,8 @@ class TCPServer {
         void modSocket(int socket_fd_, int act);
         int getSocket(int socket_fd_);
 
-        void lockSocket(int socket_fd);
-        void unlockSocket(int socket_fd);
-
         std::mutex *m_ = NULL;
         int master_socket_fd_;
-        std::vector<std::mutex *> *mutex_vec_ = NULL;
         std::vector<int> *socket_vec_ = NULL;
 
         MultiThreadQueue<Task *> *task_q_ = NULL;

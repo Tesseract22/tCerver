@@ -1,6 +1,7 @@
 #include "MultiThreadQueue.hpp"
 #include "TCPServer.hpp"
 #include <cerrno>
+#include <coroutine>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -9,17 +10,14 @@
 #include <sys/epoll.h>
 #include <thread>
 #include <unistd.h>
-
 using namespace std;
 
 void TCPServer::EPoll::stop() { running_ = false; }
 
 TCPServer::EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
-                        vector<mutex *> *mutex_vec,
                         MultiThreadQueue<Task *> *task_q)
     : m_(m),
       master_socket_fd_(master_socket_fd),
-      mutex_vec_(mutex_vec),
       socket_vec_(socket_vec),
       task_q_(task_q) {
     epoll_fd_ = epoll_create(1);
@@ -37,11 +35,9 @@ TCPServer::EPoll::EPoll(EPoll &&other) noexcept {
     epoll_fd_ = other.epoll_fd_;
     temp_event_.events = other.temp_event_.events;
     temp_event_.data = other.temp_event_.data;
-    mutex_vec_ = other.mutex_vec_;
     socket_vec_ = other.socket_vec_;
     task_q_ = other.task_q_;
 
-    other.mutex_vec_ = NULL;
     other.socket_vec_ = NULL;
     other.task_q_ = NULL;
 }
@@ -66,6 +62,7 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
     running_ = true;
     while (true) {
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
+        cout << num_event << endl;
         if (!running_) {
             return;
         }
@@ -95,17 +92,7 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
                     // endl;
 
                 } else if (revents[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-                    lockSocket(socket_i);
-                    int status;
-                    if ((status = getSocket(socket_i) & PendingRead)) {
-                        modSocket(socket_i, status |= PendingClose);
-                    } else {
-                        delSocket(socket_i);
-                    }
-
-                    // cout << "socket closed: " << socket_i << endl;
-
-                    unlockSocket(socket_i);
+                    // @
 
                 } else if (revents[i].events & EPOLLIN) {
 
@@ -116,13 +103,8 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
                             buffer[bytes] = '\n';
                             t->task += string(buffer);
                         }
-                        buffer[buffer_size] = '\0';
-                        lockSocket(socket_i);
-                        t->socket_fd = socket_i;
-                        task_q_->push(t);
-                        modSocket(socket_i, PendingRead);
-                        unlockSocket(socket_i);
                     }
+                    // co_yield buffer;
                 }
             }
         }
@@ -131,12 +113,9 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
 void TCPServer::EPoll::addSocket(int socket_fd) {
     if ((size_t)socket_fd >= socket_vec_->size()) {
         socket_vec_->resize(socket_fd + 1);
-        mutex_vec_->resize(socket_fd + 1);
     }
     if (socket_vec_->operator[](socket_fd) != 0)
         throw SocketException("socket already exist");
-    if (mutex_vec_->operator[](socket_fd) == NULL)
-        mutex_vec_->operator[](socket_fd) = new mutex;
 
     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
     temp_event_.data.fd = socket_fd;
@@ -166,18 +145,4 @@ int TCPServer::EPoll::getSocket(int socket_fd) {
         throw SocketException("getting non-existing socket");
     }
     return socket_vec_->operator[](socket_fd);
-}
-
-void TCPServer::EPoll::lockSocket(int socket_fd) {
-    if ((size_t)socket_fd >= mutex_vec_->size())
-        throw SocketException("locking non-existing socket: " +
-                              to_string(socket_fd));
-    mutex_vec_->operator[](socket_fd)->lock();
-}
-
-void TCPServer::EPoll::unlockSocket(int socket_fd) {
-    if ((size_t)socket_fd >= mutex_vec_->size())
-        throw SocketException("unlocking non-existing socket:" +
-                              to_string(socket_fd));
-    mutex_vec_->operator[](socket_fd)->unlock();
 }

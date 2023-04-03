@@ -1,5 +1,4 @@
 #include "TCPServer.hpp"
-#include "EPoll.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
@@ -54,8 +53,7 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
         throw runtime_error("threads number must be at least 1");
     epolls_.reserve(listen_threads);
     for (size_t i = 0; i < listen_threads; ++i)
-        epolls_.emplace_back(
-            EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_));
+        epolls_.emplace_back(EPoll(&epoll_m_, socket_fd_, &sockets_, &task_q_));
     // for (auto &e : epolls_)
     //     cout << e.epoll_fd_ << endl;
     addr_.sin_family = AF_INET;
