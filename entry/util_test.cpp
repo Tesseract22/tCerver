@@ -1,16 +1,18 @@
+#include <EPoll.hpp>
 #include <iostream>
-#include <utilities.hpp>
+#include <sys/epoll.h>
+#include <sys/socket.h>
 using namespace std;
-int main() {
-    char a[100] = "key: : val";
-    char *aa = a;
-    int i;
+#include <thread>
 
-    cout << (i = utility::incrementParse(aa, ": ")) << '\n';
-    aa[i] = '\0';
-    cout << aa << endl;
-    aa += i + 2;
-    cout << aa << endl;
+class test {
+  public:
+    test() { cout << epoll_create(1) << endl; }
+};
+int main() {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    // EPoll(NULL, s, NULL, NULL, NULL);
+    vector<test> v(2, test());
 
     return 0;
 }

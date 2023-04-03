@@ -18,27 +18,74 @@
 #include <vector>
 // TCP server implementation
 #define DEFAULT_PORT 80
+class SocketException : std::exception {
+  public:
+    explicit SocketException();
+    SocketException(const char *msg) : msg_(msg) {}
+    SocketException(const std::string &msg) : msg_(msg) {}
+    virtual ~SocketException() noexcept {}
+    virtual const char *what() const noexcept { return msg_.data(); }
 
+  protected:
+    std::string msg_;
+};
 class TCPServer {
   public:
-    // TCPServer(std::ostream &log = std::cout, std::ostream &err = std::cerr);
     TCPServer(HTTPUnit &&http, size_t listen_threads = 2,
               size_t parse_threads = 2, std::ostream &log_io = std::cout,
               std::ostream &err_io = std::cerr);
-    // TCPServer();
     ~TCPServer();
     void serverStart();
     void serverStop();
 
     void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
     void static sigintHandler(int dummy);
-    // void startPoll
 
   private:
-    // static std::vector<int> stop_fds_;
-    // static std::vector<EPoll *> stop_epolls_;
-    // static std::vector<std::pair<MultiThreadQueue<Task *> *, size_t>>
-    // stop_qs_;
+    struct Task {
+        std::string task;
+        int socket_fd;
+    };
+
+    enum Action {
+        Open = 0b1000,
+        PendingRead = 0b001,
+        PendingClose = 0b010,
+        PendingWrite = 0b100,
+    };
+    class EPoll {
+      public:
+        EPoll(std::mutex *m_, int master_socket_fd, std::vector<int> *sockt_vec,
+              std::vector<std::mutex *> *mutex_vec,
+              MultiThreadQueue<Task *> *task_q_);
+        EPoll(EPoll &&other) noexcept;
+        EPoll(const EPoll &X) = delete;
+
+        void wait(int dummy_fd);
+        void stop();
+        int epoll_fd_;
+
+      private:
+        void addSocket(int socket_fd_);
+        void delSocket(int socket_fd_);
+        void modSocket(int socket_fd_, int act);
+        int getSocket(int socket_fd_);
+
+        void lockSocket(int socket_fd);
+        void unlockSocket(int socket_fd);
+
+        std::mutex *m_ = NULL;
+        int master_socket_fd_;
+        std::vector<std::mutex *> *mutex_vec_ = NULL;
+        std::vector<int> *socket_vec_ = NULL;
+
+        MultiThreadQueue<Task *> *task_q_ = NULL;
+
+        epoll_event temp_event_;
+        bool running_ = false;
+        // The socket file descriptor is directly used as indexes
+        // The value in the vector represent the status of the socket
+    };
     static std::vector<TCPServer *> servers_;
     int stop_pipe_[2];
 

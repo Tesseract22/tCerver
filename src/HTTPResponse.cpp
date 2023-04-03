@@ -35,7 +35,7 @@ HTTP::HTTPResponse *HTTP::defaultFileFounder(HTTPRequest *request) {
 HTTP::HTTPResponse *HTTP::notFoundHandler(HTTPRequest *request) {
     HTTP::HTTPResponseText *not_found = new HTTP::HTTPResponseText;
     not_found->status = "404 Not Found";
-    not_found->body = "cao ni ma hty";
+    not_found->body = "404";
     not_found->headers.insert(
         {"Content-Length", std::to_string(not_found->body.length())});
     not_found->type = HTTP::fail;

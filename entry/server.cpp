@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     auto f = fstream("../logs/logs.txt", ios_base::app);
     f << "sever start" << endl;
     HTTPUnit http;
-    TCPServer server(std::move(http), 1, 1, f);
+    TCPServer server(std::move(http), 2, 2, f);
     server.serverStart();
     std::signal(SIGINT, &TCPServer::sigintHandler);
 }

@@ -23,26 +23,18 @@
 #include <vector>
 using namespace std;
 
-// TCPServer::TCPServer(ostream &log, ostream &err) {
-//     log_io_ = &log;
-//     err_io_ = &err;
-//     master_socket_ = new Socket();
-//     running_ = false;
-//     chdir("../resource");
-//     getcwd(resource_path_, sizeof(resource_path_));
-//     cout << resource_path_ << endl;
-// }
-
-// std::vector<int> TCPServer::stop_fds_;
-// std::vector<EPoll *> TCPServer::stop_epolls_;
-// std::vector<std::pair<MultiThreadQueue<Task *> *, size_t>>
-// TCPServer::stop_qs_;
 std::vector<TCPServer *> TCPServer::servers_;
 TCPServer::~TCPServer() {
+
     for (size_t i = 0; i < listen_threads_.size(); ++i)
         listen_threads_[i].join();
     for (size_t i = 0; i < parse_threads_.size(); ++i)
         parse_threads_[i].join();
+
+    for (auto &p : mutexes_) {
+        if (p)
+            delete p;
+    }
 }
 
 TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
@@ -56,14 +48,16 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
       listen_threads_(listen_threads),
       parse_threads_(parse_threads),
       mutexes_(),
-      epolls_(listen_threads_.size(),
-              std::move(EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_,
-                              &task_q_))),
-
       http_(http) {
     // setting up the socket
     if (listen_threads < 1)
         throw runtime_error("threads number must be at least 1");
+    epolls_.reserve(listen_threads);
+    for (size_t i = 0; i < listen_threads; ++i)
+        epolls_.emplace_back(
+            EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_));
+    // for (auto &e : epolls_)
+    //     cout << e.epoll_fd_ << endl;
     addr_.sin_family = AF_INET;
 
     addr_.sin_addr.s_addr = INADDR_ANY;
@@ -143,13 +137,13 @@ void TCPServer::waitParse(size_t id) {
         HTTP::HTTPResponse *response = result.second;
         response->headers.insert({"Server", "tcerver"}); // server information
 
-        string raw_response = http_.dispatchResponseHeaders(response);
-        cout << raw_response << endl;
+        string raw_headers = http_.dispatchResponseHeaders(response);
+        log_io_ << "send response with headers: \n" << raw_headers << endl;
         int bytes = 0;
         size_t total_bytes = 0;
-        while (total_bytes < raw_response.length()) {
-            if ((bytes = send(socket_fd, raw_response.data(),
-                              raw_response.length(), 0)) <= 0)
+        while (total_bytes < raw_headers.length()) {
+            if ((bytes = send(socket_fd, raw_headers.data(),
+                              raw_headers.length(), 0)) <= 0)
                 break;
             total_bytes += bytes;
         }
