@@ -30,19 +30,6 @@ int utility::incrementParse(char const *str, char const *sep) {
     return -1;
 }
 
-map<string, string> utility::parseHeader(const string &str) {
-    map<string, string> res;
-    return res;
-}
-
-vector<string> utility::splitString(const string &str, const string &sep,
-                                    ssize_t time) {
-    vector<string> res;
-    for (size_t i = 0; i < str.length(); ++i) {
-    }
-    return res;
-}
-
 const char *utility::getFileExt(const char *filename) {
     const char *dot = strrchr(filename, '.');
     if (!dot || dot == filename)

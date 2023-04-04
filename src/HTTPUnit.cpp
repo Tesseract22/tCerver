@@ -5,6 +5,7 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <sys/stat.h>
 using namespace std;
@@ -20,29 +21,27 @@ HTTPUnit::parseRequest(string &raw_request) {
     try {
         body_start = parseHeader(raw_request, request->headers);
     } catch (const runtime_error &e) {
-        cout << e.what() << endl;
         return {request, HTTP::notFoundHandler(request)};
     }
     (void)body_start; // use body
 
     string_view path = request->headers["path"];
-    auto api_iter = url_map_.find(path.data());
     request->path = path.data();
     struct stat buffer;
-    if (stat(request->path.data() + 1, &buffer) == 0) {
-        auto func = url_map_.at("_default_file_");
-        auto response = func(request);
-        HTTP::ResponseType type = response->type;
-        return {request, response};
-    }
-    if (api_iter != url_map_.end()) {
-        auto func = api_iter->second;
-        auto response = func(request);
-        HTTP::ResponseType type = response->type;
-        return {request, response};
+    auto api_iter = url_map_.find(path.data());
+    HTTP::HTTPResponse *response;
+    if (api_iter != url_map_.end()) { // url map has highest priorities
+        auto &func = api_iter->second;
+        response = func(request);
+
+    } else if (stat(request->path.data() + 1, &buffer) == 0) {
+        auto &func = url_map_.at("_default_file_");
+        response = func(request);
+
     } else {
-        return {request, HTTP::notFoundHandler(request)};
+        response = HTTP::notFoundHandler(request);
     }
+    return {request, response};
 }
 char *HTTPUnit::parseHeader(string &raw_request,
                             map<string_view, string_view> &headers) {
@@ -118,7 +117,7 @@ string HTTPUnit::dispatchResponseHeaders(HTTP::HTTPResponse *response) {
 
 void HTTPUnit::bindUrl(
     const std::string &url,
-    const std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> &func) {
+    std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> func) {
 
     url_map_.insert({url, func});
 }

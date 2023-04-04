@@ -44,6 +44,7 @@ class HTTPResponseText : public HTTPResponse {
     HTTPResponseText() : HTTPResponse() {
         type = text;
         headers.insert({"Content-Type", "text/plain"});
+        headers.insert({"Content-Length", "0"});
     }
     std::string body;
     int sendData(int socket_fd);

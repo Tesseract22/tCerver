@@ -56,7 +56,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Specify warnings for all builds.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wfatal-errors -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wfatal-errors -Wextra -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -DDEBUG=1 -g")
 
 # Path definitions.
 # set(lib_dir ${CMAKE_SOURCE_DIR}/lib)
@@ -79,7 +79,6 @@ foreach(entrypoint IN LISTS entries)
     add_executable(${entrypoint} ${entry_dir}/${entrypoint}.cpp)
     target_link_libraries(${entrypoint} PRIVATE src)
     target_compile_options(${entrypoint} PUBLIC -g)
-    target_compile_definitions(${entrypoint} PUBLIC DEBUG=1)
 endforeach()
 
 # release build

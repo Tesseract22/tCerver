@@ -10,6 +10,8 @@ class HTTPUnit {
     std::pair<HTTP::HTTPRequest *, HTTP::HTTPResponse *>
     parseRequest(std::string &raw_request);
     std::string dispatchResponseHeaders(HTTP::HTTPResponse *response);
+    void bindUrl(const std::string &url,
+                 std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> func);
 
     void bindUrl(
         const std::string &url,
