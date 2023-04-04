@@ -19,9 +19,11 @@ using namespace std;
 void TCPServer::EPoll::stop() { running_ = false; }
 
 TCPServer::EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
+                        vector<mutex *> *mutex_vec,
                         MultiThreadQueue<Task *> *task_q)
     : m_(m),
       master_socket_fd_(master_socket_fd),
+      mutex_vec_(mutex_vec),
       socket_vec_(socket_vec),
       task_q_(task_q) {
     epoll_fd_ = epoll_create(1);
@@ -164,4 +166,17 @@ int TCPServer::EPoll::getSocket(int socket_fd) {
         throw SocketException("getting non-existing socket");
     }
     return socket_vec_->operator[](socket_fd);
+}
+void TCPServer::EPoll::lockSocket(int socket_fd) {
+    if ((size_t)socket_fd >= mutex_vec_->size())
+        throw SocketException("locking non-existing socket: " +
+                              to_string(socket_fd));
+    mutex_vec_->operator[](socket_fd)->lock();
+}
+
+void TCPServer::EPoll::unlockSocket(int socket_fd) {
+    if ((size_t)socket_fd >= mutex_vec_->size())
+        throw SocketException("unlocking non-existing socket:" +
+                              to_string(socket_fd));
+    mutex_vec_->operator[](socket_fd)->unlock();
 }

@@ -4,3 +4,10 @@ build/
 .cache
 logs/logs.txt
 resource/
+
+static/test.hpp
+**/compile_commands.json
+header.py
+header.sh
+
+

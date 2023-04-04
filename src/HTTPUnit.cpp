@@ -117,7 +117,7 @@ string HTTPUnit::dispatchResponseHeaders(HTTP::HTTPResponse *response) {
 
 void HTTPUnit::bindUrl(
     const std::string &url,
-    std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> func) {
+    const std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> &func) {
 
     url_map_.insert({url, func});
 }

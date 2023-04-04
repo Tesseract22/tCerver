@@ -19,11 +19,6 @@ HTTP::HTTPResponse *test(HTTP::HTTPRequest *request) {
 }
 
 using namespace std;
-HTTP::HTTPResponse *test(HTTP::HTTPRequest *request) {
-    HTTP::HTTPResponseText *response = new HTTP::HTTPResponseText;
-    response->body = "This is a test";
-    return response;
-}
 
 int main(int argc, char *argv[]) {
 
