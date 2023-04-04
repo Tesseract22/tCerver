@@ -10,6 +10,9 @@
 #include <thread>
 #include <unistd.h>
 
+#define DEBUG_PRINT(info)                                                      \
+    cout << "[" << this_thread::get_id() << "] " << info << endl;
+
 using namespace std;
 
 void TCPServer::EPoll::stop() { running_ = false; }
@@ -53,8 +56,9 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
     memset(buffer, 0, 1025);
 
     epoll_event revents[20];
+
 #if DEBUG
-    cout << "listening thread started" << '\n';
+    DEBUG_PRINT("start listening")
 #endif
     if (!running_) {
         temp_event_.events = EPOLLIN;
@@ -66,6 +70,9 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
     running_ = true;
     while (true) {
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
+#if DEBUG
+        DEBUG_PRINT("num_event: " << num_event)
+#endif
         if (!running_) {
             return;
         }
@@ -84,15 +91,13 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
                             throw SocketException(
                                 "failed to establish new socket");
                     } else {
-                        temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
-                        temp_event_.data.fd = new_socket_fd;
                         m_->lock();
                         addSocket(new_socket_fd);
                         m_->unlock();
                     }
-
-                    // cout << "new socket established: " << new_socket_fd <<
-                    // endl;
+#if DEBUG
+                    DEBUG_PRINT("new socket established: " << new_socket_fd)
+#endif
 
                 } else if (revents[i].events & (EPOLLRDHUP | EPOLLHUP)) {
                     lockSocket(socket_i);
@@ -102,27 +107,26 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
                     } else {
                         delSocket(socket_i);
                     }
-
-                    // cout << "socket closed: " << socket_i << endl;
-
+#if DEBUG
+                    DEBUG_PRINT("socket closed: " << socket_i)
+#endif
                     unlockSocket(socket_i);
 
                 } else if (revents[i].events & EPOLLIN) {
-
-                    {
-                        Task *t = new Task;
-                        while ((bytes = read(socket_i, buffer, buffer_size)) >=
-                               0) {
-                            buffer[bytes] = '\n';
-                            t->task += string(buffer);
-                        }
-                        buffer[buffer_size] = '\0';
-                        lockSocket(socket_i);
-                        t->socket_fd = socket_i;
-                        task_q_->push(t);
-                        modSocket(socket_i, PendingRead);
-                        unlockSocket(socket_i);
+#if DEBUG
+                    DEBUG_PRINT("incoming read from: " << socket_i)
+#endif
+                    Task *t = new Task;
+                    while ((bytes = read(socket_i, buffer, buffer_size)) >= 0) {
+                        buffer[bytes] = '\n';
+                        t->task += string(buffer);
                     }
+                    buffer[buffer_size] = '\0';
+                    lockSocket(socket_i);
+                    t->socket_fd = socket_i;
+                    task_q_->push(t);
+                    modSocket(socket_i, PendingRead);
+                    unlockSocket(socket_i);
                 }
             }
         }

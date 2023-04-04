@@ -1,5 +1,4 @@
 #include "TCPServer.hpp"
-#include "EPoll.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
@@ -103,6 +102,7 @@ void TCPServer::waitListen(size_t id) {
         err_io_ << e.what() << endl;
         waitListen(id);
     }
+    cout << "waitlisten stop" << endl;
 }
 
 void TCPServer::serverStart() {
@@ -125,10 +125,10 @@ void TCPServer::waitParse(size_t id) {
 #if DEBUG
     cout << this_thread::get_id() << " start fetching task..." << endl;
 #endif
-    while (true) {
+    while (running_) {
         Task *t = task_q_.pull();
         if (t == NULL) {
-            return;
+            break;
         }
 
         int socket_fd = t->socket_fd;
@@ -136,7 +136,6 @@ void TCPServer::waitParse(size_t id) {
         HTTP::HTTPRequest *request = result.first;
         HTTP::HTTPResponse *response = result.second;
         response->headers.insert({"Server", "tcerver"}); // server information
-
         string raw_headers = http_.dispatchResponseHeaders(response);
         log_io_ << "send response with headers: \n" << raw_headers << endl;
         int bytes = 0;

@@ -1,5 +1,4 @@
 #pragma once
-#include "EPoll.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
@@ -14,6 +13,7 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <sys/epoll.h>
 #include <thread>
 #include <vector>
 // TCP server implementation
