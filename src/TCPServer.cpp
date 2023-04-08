@@ -48,8 +48,6 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
         epolls_.emplace_back(
             EPoll(epoll_m_, socket_fd_, sockets_, mutexes_,
                   [this](string &str) { return handleRequest(str); }));
-    // for (auto &e : epolls_)
-    //     cout << e.epoll_fd_ << endl;
     addr_.sin_family = AF_INET;
 
     addr_.sin_addr.s_addr = INADDR_ANY;
