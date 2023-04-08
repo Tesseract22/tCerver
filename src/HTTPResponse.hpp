@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <variant>
 typedef std::map<std::string, std::string> s_map_t;
 
 namespace HTTP {
@@ -22,7 +23,7 @@ class HTTPResponse {
     std::string status = "200 OK";
     std::string http_ver = "HTTP/1.1";
     ResponseType type = text;
-    virtual int sendData(int socket_fd) = 0;
+    virtual std::variant<int, std::string> getBody() = 0;
     virtual ~HTTPResponse() {}
 };
 class HTTPRequest {
@@ -47,7 +48,7 @@ class HTTPResponseText : public HTTPResponse {
         headers.insert({"Content-Length", "0"});
     }
     std::string body;
-    int sendData(int socket_fd);
+    std::variant<int, std::string> getBody();
 };
 
 class HTTPResponseFile : public HTTPResponse {
@@ -57,7 +58,7 @@ class HTTPResponseFile : public HTTPResponse {
     std::string path_to_file;
     int fd = -1;
     size_t file_size;
-    int sendData(int socket_fd);
+    std::variant<int, std::string> getBody();
     // ~HTTPResponseFile() { close(fd); }
 };
 

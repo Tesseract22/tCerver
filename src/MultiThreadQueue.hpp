@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <iostream>
 #include <mutex>
-#include <thread>
+
 #include <vector>
 #define INIT_SIZE 4
 
@@ -75,7 +75,6 @@ template <typename T> T &MultiThreadQueue<T>::pull() {
     std::unique_lock<std::mutex> lock(m_);
 
     cond_.wait(lock, [this] { return curr_size_ != 0; });
-
     T &ret = data_[top_++];
     top_ %= size_;
     curr_size_--;

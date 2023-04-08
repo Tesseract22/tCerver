@@ -2,6 +2,8 @@
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
+#include "Scheduler.hpp"
+#include "Task.hpp"
 #include "utilities.hpp"
 #include <chrono>
 #include <condition_variable>
@@ -11,6 +13,7 @@
 #include <exception>
 #include <fcntl.h>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <sys/sendfile.h>
@@ -19,22 +22,12 @@
 #include <thread>
 #include <unistd.h>
 #include <utility>
+#include <variant>
 #include <vector>
 using namespace std;
 
 std::vector<TCPServer *> TCPServer::servers_;
-TCPServer::~TCPServer() {
-
-    for (size_t i = 0; i < listen_threads_.size(); ++i)
-        listen_threads_[i].join();
-    for (size_t i = 0; i < parse_threads_.size(); ++i)
-        parse_threads_[i].join();
-
-    for (auto &p : mutexes_) {
-        if (p)
-            delete p;
-    }
-}
+TCPServer::~TCPServer() { Scheduler::join(); }
 
 TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
                      size_t parse_threads, ostream &log_io, ostream &err_io)
@@ -43,7 +36,6 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
       err_io_(err_io),
       socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
       port_(DEFAULT_PORT),
-      task_q_(),
       listen_threads_(listen_threads),
       parse_threads_(parse_threads),
       mutexes_(),
@@ -54,7 +46,8 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
     epolls_.reserve(listen_threads);
     for (size_t i = 0; i < listen_threads; ++i)
         epolls_.emplace_back(
-            EPoll(&epoll_m_, socket_fd_, &sockets_, &mutexes_, &task_q_));
+            EPoll(epoll_m_, socket_fd_, sockets_, mutexes_,
+                  [this](string &str) { return handleRequest(str); }));
     // for (auto &e : epolls_)
     //     cout << e.epoll_fd_ << endl;
     addr_.sin_family = AF_INET;
@@ -79,79 +72,50 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
     servers_.push_back(this);
 }
 
-void TCPServer::sigintHandler(int dummpy) {
-    char temp[4] = "end";
-    for (auto server : servers_) {
-        server->running_ = false;
-        for (auto &e : server->epolls_) {
-            e.stop();
-            write(server->stop_pipe_[1], temp, 4);
-        }
-
-        for (size_t i = 0; i < server->parse_threads_.size(); ++i) {
-            server->task_q_.push(NULL);
-        }
-    }
-}
+void TCPServer::sigintHandler(int dummpy) {}
 
 void TCPServer::waitListen(size_t id) {
 
-    try {
-        epolls_[id].wait(stop_pipe_[0]);
-    } catch (SocketException &e) {
-        err_io_ << e.what() << endl;
-        waitListen(id);
+    for (size_t i = 0; i < listen_threads_.size(); ++i) {
+        epolls_[id].wait(stop_pipe_[0]); // start coroutine;
     }
-    cout << "waitlisten stop" << endl;
+    // try {
+    //     epolls_[id].wait(stop_pipe_[0]);
+    // } catch (SocketException &e) {
+    //     err_io_ << e.what() << endl;
+    //     waitListen(id);
+    // }
+    // cout << "waitlisten stop" << endl;
 }
 
 void TCPServer::serverStart() {
 
-    // socket_thread_ = thread(&SocketBase::startListen, master_socket_);
     running_ = true;
-    for (size_t i = 0; i < listen_threads_.size(); ++i) {
-        listen_threads_[i] = thread(&TCPServer::waitListen, this, i);
+    Scheduler::start(20);
+    for (size_t i = 0; i < epolls_.size(); ++i) {
+        waitListen(i);
     }
-    for (size_t i = 0; i < parse_threads_.size(); ++i) {
-        parse_threads_[i] = thread(&TCPServer::waitParse, this, i);
-    }
-
     cout << "server started" << endl;
 }
 
 void TCPServer::serverStop() { running_ = false; }
 
-void TCPServer::waitParse(size_t id) {
-#if DEBUG
-    cout << this_thread::get_id() << " start fetching task..." << endl;
-#endif
-    while (running_) {
-        Task *t = task_q_.pull();
-        if (t == NULL) {
-            break;
-        }
-
-        int socket_fd = t->socket_fd;
-        auto result = http_.parseRequest(t->task);
-        HTTP::HTTPRequest *request = result.first;
-        HTTP::HTTPResponse *response = result.second;
-        response->headers.insert({"Server", "tcerver"}); // server information
-        string raw_headers = http_.dispatchResponseHeaders(response);
-        log_io_ << "send response with headers: \n" << raw_headers << endl;
-        int bytes = 0;
-        size_t total_bytes = 0;
-        while (total_bytes < raw_headers.length()) {
-            if ((bytes = send(socket_fd, raw_headers.data(),
-                              raw_headers.length(), 0)) <= 0)
-                break;
-            total_bytes += bytes;
-        }
-        response->sendData(socket_fd);
-        // logRequest(request, response);
-        delete request;
-        delete response;
-        delete t;
+Task<TCPServer::Response> TCPServer::handleRequest(std::string &str) {
+    auto result = http_.parseRequest(str);
+    HTTP::HTTPRequest *request = result.first;
+    HTTP::HTTPResponse *response = result.second;
+    response->headers.insert({"Server", "tcerver"}); // server
+    TCPServer::Response tcp_response;
+    tcp_response.str = http_.dispatchResponseHeaders(response);
+    if (response->getBody().index() == 0) {
+        tcp_response.fd = std::get<int>(response->getBody());
+    } else {
+        tcp_response.str += std::move(std::get<string>(response->getBody()));
     }
+    // logRequest(request, response);
+    delete request;
+    delete response;
+    co_return tcp_response;
 }
 
 void TCPServer::logRequest(HTTP::HTTPRequest *request,

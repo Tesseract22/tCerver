@@ -1,51 +1,48 @@
+#include "Scheduler.hpp"
+#include "TCPServer.hpp"
+#include "Task.hpp"
+#include <algorithm>
+#include <assert.h>
+#include <condition_variable>
 #include <coroutine>
-
+#include <cstddef>
+#include <functional>
 #include <iostream>
+#include <iterator>
+#include <mutex>
+#include <optional>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 
-struct ReturnObject {
-    struct promise_type {
-        int value;
-        ReturnObject get_return_object() {
-            return {std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-        std::suspend_never initial_suspend() { return {}; }
-        std::suspend_never final_suspend() noexcept { return {}; }
-        std::suspend_always await_transform(int value) {
-            this->value = value;
-            return {};
-        }
-        void unhandled_exception() {}
-        int return_value(int a) { return 0; }
-    };
-    int next() {
-        handle.resume();
-        return handle.promise().value;
-    }
-    std::coroutine_handle<promise_type> handle;
-};
+Task<int> async_call() {
+    DEBUG_PRINT("#1 in async call. this should not block");
+    sleep(2);
+    DEBUG_PRINT("#3 in async call. end");
 
-struct Awaiter {
-    std::coroutine_handle<> *hp_;
-    constexpr bool await_ready() const noexcept { return false; }
-    void await_suspend(std::coroutine_handle<> h) { *hp_ = h; }
-    constexpr void await_resume() const noexcept {}
-};
-
-ReturnObject counter() {
-    int i = 0;
-    while (1) {
-        co_await i;
-        i++;
-    }
+    co_yield 101;
 }
+
+Task<TCPServer::Response> test() {
+    sleep(1);
+    DEBUG_PRINT("?????????");
+    co_yield TCPServer::Response();
+}
+
 int main() {
-    ReturnObject ret = counter();
-    for (int i = 0; i < 5; ++i) {
-        std::cout << ret.next() << '\n';
-    }
-    return 0;
+    DEBUG_PRINT("main");
+    Scheduler::start();
+
+    // sleep(4);
+    // t.then([](int res) { std::cout << "result: " << res << '\n'; });
+    auto reading = []() -> Task<void> {
+        char buffer[1024];
+        DEBUG_PRINT("start reading");
+        std::string result = "This is a test";
+        co_await test();
+        DEBUG_PRINT("END OF CO_AWAIT");
+    }();
+    Scheduler::join();
 }

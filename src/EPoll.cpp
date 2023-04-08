@@ -1,31 +1,37 @@
 #include "MultiThreadQueue.hpp"
+#include "Scheduler.hpp"
 #include "TCPServer.hpp"
+#include "Task.hpp"
+#include "utilities.hpp"
 #include <cerrno>
 #include <coroutine>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <sys/epoll.h>
+#include <sys/types.h>
 #include <thread>
 #include <unistd.h>
-
-#define DEBUG_PRINT(info)                                                      \
-    cout << "[" << this_thread::get_id() << "] " << info << endl;
-
 using namespace std;
+// reworking Epoll using coroutine
+// basically, change the Epoll wait function to a coroutine.
+// the time consuming read and write is preformed on an awaiter
+// we can bind a callback function to the awaiter,
+// we can use this callback to parse the response
 
 void TCPServer::EPoll::stop() { running_ = false; }
 
-TCPServer::EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
-                        vector<mutex *> *mutex_vec,
-                        MultiThreadQueue<Task *> *task_q)
+TCPServer::EPoll::EPoll(mutex &m, int master_socket_fd, vector<int> &socket_vec,
+                        vector<mutex *> &mutex_vec,
+                        const function<Task<Response>(string &)> &callback)
     : m_(m),
       master_socket_fd_(master_socket_fd),
       mutex_vec_(mutex_vec),
       socket_vec_(socket_vec),
-      task_q_(task_q) {
+      handleReqeust_(callback) {
     epoll_fd_ = epoll_create(1);
     memset(&temp_event_, 0, sizeof(epoll_event));
     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
@@ -35,24 +41,11 @@ TCPServer::EPoll::EPoll(mutex *m, int master_socket_fd, vector<int> *socket_vec,
         throw runtime_error("failed to add socket to epoll");
 }
 
-TCPServer::EPoll::EPoll(EPoll &&other) noexcept {
-    m_ = other.m_;
-    master_socket_fd_ = other.master_socket_fd_;
-    epoll_fd_ = other.epoll_fd_;
-    temp_event_.events = other.temp_event_.events;
-    temp_event_.data = other.temp_event_.data;
-    socket_vec_ = other.socket_vec_;
-    task_q_ = other.task_q_;
+Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
 
-    other.socket_vec_ = NULL;
-    other.task_q_ = NULL;
-}
-
-void TCPServer::EPoll::wait(int dummpy_fd) {
-
-    char buffer[1025];
-    int buffer_size = 1024;
-    memset(buffer, 0, 1025);
+    // char buffer[1025];
+    // int buffer_size = 1024;
+    // memset(buffer, 0, 1025);
 
     epoll_event revents[20];
 
@@ -73,7 +66,7 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
         DEBUG_PRINT("num_event: " << num_event)
 #endif
         if (!running_) {
-            return;
+            co_return;
         }
         if (num_event < 0) {
             throw SocketException("epoll_wait failed, retrying");
@@ -90,9 +83,9 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
                             throw SocketException(
                                 "failed to establish new socket");
                     } else {
-                        m_->lock();
+                        m_.lock();
                         addSocket(new_socket_fd);
-                        m_->unlock();
+                        m_.unlock();
                     }
 #if DEBUG
                     DEBUG_PRINT("new socket established: " << new_socket_fd)
@@ -115,27 +108,28 @@ void TCPServer::EPoll::wait(int dummpy_fd) {
 #if DEBUG
                     DEBUG_PRINT("incoming read from: " << socket_i)
 #endif
-                    Task *t = new Task;
-                    while ((bytes = read(socket_i, buffer, buffer_size)) >= 0) {
-                        buffer[bytes] = '\n';
-                        t->task += string(buffer);
-                    }
-                    buffer[buffer_size] = '\0';
-                    lockSocket(socket_i);
-                    t->socket_fd = socket_i;
-                    task_q_->push(t);
-                    modSocket(socket_i, PendingRead);
-                    unlockSocket(socket_i);
+                    [socket_i, this]() -> Task<void> {
+                        char buffer[1024];
+                        string result =
+                            utility::readSocket(socket_i, buffer, 1023);
+                        Response response = co_await handleReqeust_(result);
+                        utility::writeSocket(socket_i, response.str.data(),
+                                             response.str.length());
+                        if (response.fd > 0) {
+                            utility::writeFileSocket(socket_i, response.fd);
+                            close(response.fd);
+                        }
+                    }();
                 }
             }
         }
     }
 }
 void TCPServer::EPoll::addSocket(int socket_fd) {
-    if ((size_t)socket_fd >= socket_vec_->size()) {
-        socket_vec_->resize(socket_fd + 1);
+    if ((size_t)socket_fd >= socket_vec_.size()) {
+        socket_vec_.resize(socket_fd + 1);
     }
-    if (socket_vec_->operator[](socket_fd) != 0)
+    if (socket_vec_[socket_fd] != 0)
         throw SocketException("socket already exist");
 
     temp_event_.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
@@ -143,40 +137,40 @@ void TCPServer::EPoll::addSocket(int socket_fd) {
     epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_fd, &temp_event_);
     // @important!
     fcntl(socket_fd, F_SETFL, O_NONBLOCK);
-    socket_vec_->operator[](socket_fd) = Open;
+    socket_vec_[socket_fd] = Open;
 }
 
 void TCPServer::EPoll::delSocket(int socket_fd) {
-    if ((size_t)socket_fd >= socket_vec_->size()) {
+    if ((size_t)socket_fd >= socket_vec_.size()) {
         throw SocketException("deleting non-existing socket");
     }
-    socket_vec_->operator[](socket_fd) = 0;
+    socket_vec_[socket_fd] = Closed;
     close(socket_fd);
 }
 
 void TCPServer::EPoll::modSocket(int socket_fd, int act) {
-    if ((size_t)socket_fd >= socket_vec_->size()) {
+    if ((size_t)socket_fd >= socket_vec_.size()) {
         throw SocketException("modifying non-existing socket");
     }
-    socket_vec_->operator[](socket_fd) = act;
+    socket_vec_[socket_fd] = act;
 }
 
 int TCPServer::EPoll::getSocket(int socket_fd) {
-    if ((size_t)socket_fd >= socket_vec_->size()) {
+    if ((size_t)socket_fd >= socket_vec_.size()) {
         throw SocketException("getting non-existing socket");
     }
-    return socket_vec_->operator[](socket_fd);
+    return socket_vec_[socket_fd];
 }
 void TCPServer::EPoll::lockSocket(int socket_fd) {
-    if ((size_t)socket_fd >= mutex_vec_->size())
+    if ((size_t)socket_fd >= mutex_vec_.size())
         throw SocketException("locking non-existing socket: " +
                               to_string(socket_fd));
-    mutex_vec_->operator[](socket_fd)->lock();
+    mutex_vec_[socket_fd]->lock();
 }
 
 void TCPServer::EPoll::unlockSocket(int socket_fd) {
-    if ((size_t)socket_fd >= mutex_vec_->size())
+    if ((size_t)socket_fd >= mutex_vec_.size())
         throw SocketException("unlocking non-existing socket:" +
                               to_string(socket_fd));
-    mutex_vec_->operator[](socket_fd)->unlock();
+    mutex_vec_[socket_fd]->unlock();
 }

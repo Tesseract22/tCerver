@@ -2,8 +2,10 @@
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
+#include "Task.hpp"
 
 #include <condition_variable>
+#include <coroutine>
 #include <cstddef>
 #include <fstream>
 #include <functional>
@@ -11,14 +13,15 @@
 #include <mutex>
 #include <netinet/in.h>
 #include <ostream>
-#include <sstream>
 #include <string>
 #include <sys/epoll.h>
 #include <thread>
+#include <variant>
 #include <vector>
 // TCP server implementation
 #define DEFAULT_PORT 80
 class SocketException : std::exception {
+
   public:
     explicit SocketException();
     SocketException(const char *msg) : msg_(msg) {}
@@ -40,28 +43,28 @@ class TCPServer {
 
     void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
     void static sigintHandler(int dummy);
-
-  private:
-    struct Task {
-        std::string task;
-        int socket_fd;
+    typedef int FileFd;
+    struct Response {
+        std::string str = "";
+        FileFd fd = -1;
     };
 
-    enum Action {
-        Open = 0b1000,
-        PendingRead = 0b001,
-        PendingClose = 0b010,
-        PendingWrite = 0b100,
+  private:
+    enum Status {
+        Open = 0b1,
+        PendingRead = 0b10,
+        PendingClose = 0b100,
+        Closed = 0,
     };
     class EPoll {
       public:
-        EPoll(std::mutex *m_, int master_socket_fd, std::vector<int> *sockt_vec,
-              std::vector<std::mutex *> *mutex_vec,
-              MultiThreadQueue<Task *> *task_q_);
-        EPoll(EPoll &&other) noexcept;
+        EPoll(std::mutex &m_, int master_socket_fd, std::vector<int> &sockt_vec,
+              std::vector<std::mutex *> &mutex_vec,
+              const std::function<Task<Response>(std::string &)> &callback);
+        EPoll(EPoll &&other) = default;
         EPoll(const EPoll &X) = delete;
 
-        void wait(int dummy_fd);
+        Task<void> wait(int dummy_fd);
         void stop();
         int epoll_fd_;
 
@@ -74,23 +77,25 @@ class TCPServer {
         void lockSocket(int socket_fd);
         void unlockSocket(int socket_fd);
 
-        std::mutex *m_ = NULL;
+        std::mutex &m_;
         int master_socket_fd_;
-        std::vector<std::mutex *> *mutex_vec_ = NULL;
-        std::vector<int> *socket_vec_ = NULL;
-
-        MultiThreadQueue<Task *> *task_q_ = NULL;
-
+        std::vector<std::mutex *> &mutex_vec_;
+        std::vector<int> &socket_vec_;
+        std::function<Task<Response>(std::string &)> handleReqeust_;
         epoll_event temp_event_;
         bool running_ = false;
         // The socket file descriptor is directly used as indexes
         // The value in the vector represent the status of the socket
     };
+    // std::function<Task<std::string>(TCPServer *, const std::string &)>
+    //     protocol_;
     static std::vector<TCPServer *> servers_;
     int stop_pipe_[2];
 
     void waitParse(size_t id);
     void waitListen(size_t id);
+
+    Task<TCPServer::Response> handleRequest(std::string &str);
     bool running_;
 
     std::ostream &log_io_;
@@ -102,8 +107,6 @@ class TCPServer {
     int socket_fd_;
     sockaddr_in addr_;
     int port_;
-
-    MultiThreadQueue<Task *> task_q_;
 
     // An array of threads listening to requests, we are not responsible for
     // allocating and deallocating this

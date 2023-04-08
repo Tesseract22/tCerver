@@ -42,24 +42,11 @@ HTTP::HTTPResponse *HTTP::notFoundHandler(HTTPRequest *request) {
     return not_found;
 }
 
-int HTTP::HTTPResponseText::sendData(int socket_fd) {
-    int bytes = 0;
-    int total = 0;
-    while ((bytes = send(socket_fd, body.data(), body.length(), 0)) > 0) {
-        total += bytes;
-    }
-    return total;
+std::variant<int, std::string> HTTP::HTTPResponseText::getBody() {
+    return body;
 }
 
-int HTTP::HTTPResponseFile::sendData(int socket_fd) {
-    off_t offset = 0;
-    int bytes = 0;
-    int total = 0;
-    while ((bytes = (sendfile(socket_fd, fd, &offset, 10240))) > 0) {
-        total += bytes;
-    }
-    return total;
-}
+std::variant<int, std::string> HTTP::HTTPResponseFile::getBody() { return fd; }
 
 const std::unordered_map<std::string, std::string> HTTP::g_mime_type_map = {
     {".aac", "audio/aac"},

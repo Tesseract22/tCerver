@@ -1,5 +1,6 @@
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
+#include "Scheduler.hpp"
 #include <TCPServer.hpp>
 #include <coroutine>
 #include <csignal>
@@ -22,11 +23,14 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 
+    // Scheduler::start(10);
     auto f = fstream("../logs/logs.txt", ios_base::app);
     f << "sever start" << endl;
     HTTPUnit http;
     http.bindUrl("/test", test);
     TCPServer server(std::move(http), 2, 2, f);
     server.serverStart();
-    std::signal(SIGINT, &TCPServer::sigintHandler);
+    // std::signal(SIGINT, &TCPServer::sigintHandler);
+
+    // Scheduler::join();
 }
