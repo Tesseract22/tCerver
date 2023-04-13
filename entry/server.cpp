@@ -28,9 +28,6 @@ int main(int argc, char *argv[]) {
     f << "sever start" << endl;
     HTTPUnit http;
     http.bindUrl("/test", test);
-    TCPServer server(std::move(http), 2, 2, f);
+    TCPServer server(std::move(http), 2, f);
     server.serverStart();
-    // std::signal(SIGINT, &TCPServer::sigintHandler);
-
-    // Scheduler::join();
 }

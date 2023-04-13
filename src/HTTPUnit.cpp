@@ -1,9 +1,11 @@
 #include "HTTPUnit.hpp"
 #include "HTTPResponse.hpp"
+#include "Logs.hpp"
 #include "utilities.hpp"
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -16,25 +18,26 @@ HTTPUnit::HTTPUnit() {
 
 pair<HTTP::HTTPRequest *, HTTP::HTTPResponse *>
 HTTPUnit::parseRequest(string &raw_request) {
-    char *body_start;
+    // LOG(raw_request);
+    char *ptr;
     HTTP::HTTPRequest *request = new HTTP::HTTPRequest;
     try {
-        body_start = parseHeader(raw_request, request->headers);
+        ptr = dispatchHTTP(raw_request, request);
+        ptr = dispatchHeader(ptr, request->headers);
+        request->raw_body = ptr;
+        request->args = parseArgs(request->path.data());
     } catch (const runtime_error &e) {
         return {request, HTTP::notFoundHandler(request)};
-    }
-    (void)body_start; // use body
-
-    string_view path = request->headers["path"];
-    request->path = path.data();
-    struct stat buffer;
-    auto api_iter = url_map_.find(path.data());
+    }; // use body
+    handleMethod(request);
+    struct stat stat_buf;
+    auto api_iter = url_map_.find(request->path.data());
     HTTP::HTTPResponse *response;
     if (api_iter != url_map_.end()) { // url map has highest priorities
         auto &func = api_iter->second;
         response = func(request);
 
-    } else if (stat(request->path.data() + 1, &buffer) == 0) {
+    } else if (stat(request->path.data() + 1, &stat_buf) == 0) {
         auto &func = url_map_.at("_default_file_");
         response = func(request);
 
@@ -43,28 +46,65 @@ HTTPUnit::parseRequest(string &raw_request) {
     }
     return {request, response};
 }
-char *HTTPUnit::parseHeader(string &raw_request,
-                            map<string_view, string_view> &headers) {
+
+void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
+    const static string POST = "POST";
+    const static string GET = "GET";
+    const static string POST_RAW_FORM = "application/x-www-form-urlencoded";
+    const static string POST_FORM_DATA = "multipart/form-data";
+    if (request->method == POST) {
+        LOG("POST")
+        try {
+            auto &content_type = request->headers.at("Content-Type");
+            auto seps = parseSemiColSeperated(string(content_type));
+
+            // cerr << "[" << request->headers.at("Content-Type") << "]   ";
+            string &type = seps.at(0);
+            if (type.starts_with(POST_RAW_FORM)) {
+                LOG(request->raw_body)
+                request->body.args = parseArgs(request->raw_body.data());
+            } else if (type.starts_with(POST_FORM_DATA)) {
+                LOG("[", type, "]  ",
+                    strcmp(type.data(), "application/x-www-form-urlencoded"))
+            }
+            // string &boundary = seps.at(1);
+            // cout << type << ' ' << boundary << '\n';
+        } catch (const std::out_of_range &e) {
+            LOG("error");
+        }
+    } else {
+        LOG("GET")
+    }
+}
+
+char *HTTPUnit::dispatchHTTP(std::string &raw_request,
+                             HTTP::HTTPRequest *request) {
     char *c_str = raw_request.data();
     int idx;
     // method
     if ((idx = utility::incrementParse(c_str, " ")) < 0)
         throw runtime_error("header has incorrect format, method");
     c_str[idx] = '\0';
-    headers.insert({"method", c_str});
+    request->method = c_str;
     c_str += idx + 1;
     // path
     if ((idx = utility::incrementParse(c_str, " ")) < 0)
         throw runtime_error("header has incorrect format, path");
     c_str[idx] = '\0';
-    headers.insert({"path", c_str});
+    request->path = c_str;
     c_str += idx + 1;
     // http version, we support HTTP 1.1
     if ((idx = utility::incrementParse(c_str, "\n")) < 0)
         throw runtime_error("header has incorrect format, http version");
     c_str[idx] = '\0';
-    headers.insert({"http_var", c_str});
+    request->protocol = c_str;
     c_str += idx + 1;
+    return c_str;
+}
+char *HTTPUnit::dispatchHeader(char *c_str,
+                               map<string_view, string_view> &headers) {
+    int idx = 0;
+    // method
 
     // parse the rest of the header
     while (idx != -1) { // err code
@@ -78,8 +118,8 @@ char *HTTPUnit::parseHeader(string &raw_request,
         if (strcmp(c_str, "\r") == 0) {
             // end of header
             // see
-            //
             // https://stackoverflow.com/questions/5757290/http-header-line-break-style
+            c_str += idx + 1;
             break;
         }
         // and then seperate by ": "
@@ -94,7 +134,7 @@ char *HTTPUnit::parseHeader(string &raw_request,
     }
     return c_str;
 }
-string HTTPUnit::dispatchResponseHeaders(HTTP::HTTPResponse *response) {
+string HTTPUnit::getResponseHeaders(HTTP::HTTPResponse *response) {
     string res;
     res.reserve(100);
     //          "HTTP/1.1 200 OK\nContent-Type: "
@@ -115,9 +155,43 @@ string HTTPUnit::dispatchResponseHeaders(HTTP::HTTPResponse *response) {
     return res;
 }
 
+map<string, string> HTTPUnit::parseUrl(string &url) noexcept {
+    char *c_str = url.data();
+    int question_mark = utility::incrementParse(c_str, "?");
+    if (question_mark == -1)
+        return {};
+    c_str += question_mark + 1;
+    return parseArgs(c_str);
+}
+map<string, string> HTTPUnit::parseArgs(const char *c_str) noexcept {
+    // alternative regex str_expr("[(\?|&)]([^=]+)=([^&#]+)");
+    regex reg("([^?]*?)=(.*?)(&|$|\r|\n)");
+    cmatch cm;
+    map<string, string> res;
+    const char *search = c_str;
+    while (regex_search(search, cm, reg)) {
+        res[cm[1]] = cm[2];
+        search = cm.suffix().first;
+    }
+    return res;
+}
+
+std::vector<std::string>
+HTTPUnit::parseSemiColSeperated(const string &str) noexcept {
+    regex semi_col_reg("[^;]+?(?=;|$)");
+    smatch sm_result;
+    string search = str;
+    vector<string> res;
+    while (regex_search(search, sm_result, semi_col_reg)) {
+        res.push_back(sm_result[0]);
+        search = sm_result.suffix();
+    }
+    return res;
+}
+
 void HTTPUnit::bindUrl(
-    const std::string &url,
-    const std::function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> &func) {
+    const string &url,
+    const function<HTTP::HTTPResponse *(HTTP::HTTPRequest *)> &func) {
 
     url_map_.insert({url, func});
 }

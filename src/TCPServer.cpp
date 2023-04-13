@@ -1,6 +1,7 @@
 #include "TCPServer.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
+#include "Logs.hpp"
 #include "MultiThreadQueue.hpp"
 #include "Scheduler.hpp"
 #include "Task.hpp"
@@ -27,26 +28,26 @@
 using namespace std;
 
 std::vector<TCPServer *> TCPServer::servers_;
-TCPServer::~TCPServer() { Scheduler::join(); }
+TCPServer::~TCPServer() {}
 
-TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
-                     size_t parse_threads, ostream &log_io, ostream &err_io)
+TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads, ostream &log_io,
+                     ostream &err_io)
 
     : log_io_(log_io),
       err_io_(err_io),
       socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
       port_(DEFAULT_PORT),
       listen_threads_(listen_threads),
-      parse_threads_(parse_threads),
       mutexes_(),
-      http_(http) {
+      http_(http),
+      s_(10) {
     // setting up the socket
     if (listen_threads < 1)
         throw runtime_error("threads number must be at least 1");
     epolls_.reserve(listen_threads);
     for (size_t i = 0; i < listen_threads; ++i)
         epolls_.emplace_back(
-            EPoll(epoll_m_, socket_fd_, sockets_, mutexes_,
+            EPoll(epoll_m_, socket_fd_, sockets_, mutexes_, s_,
                   [this](string &str) { return handleRequest(str); }));
     addr_.sin_family = AF_INET;
 
@@ -64,7 +65,8 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads,
     if (listen(socket_fd_, 3) < 0)
         throw runtime_error("listen failed");
 
-    chdir("../resource");
+    if (chdir("../resource"))
+        throw std::runtime_error("connot open directory ../resource");
     getcwd(resource_path_, 100);
     pipe(stop_pipe_);
     servers_.push_back(this);
@@ -74,37 +76,29 @@ void TCPServer::sigintHandler(int dummpy) {}
 
 void TCPServer::waitListen(size_t id) {
 
-    for (size_t i = 0; i < listen_threads_.size(); ++i) {
+    for (size_t i = 0; i < listen_threads_; ++i) {
         epolls_[id].wait(stop_pipe_[0]); // start coroutine;
     }
-    // try {
-    //     epolls_[id].wait(stop_pipe_[0]);
-    // } catch (SocketException &e) {
-    //     err_io_ << e.what() << endl;
-    //     waitListen(id);
-    // }
-    // cout << "waitlisten stop" << endl;
 }
 
 void TCPServer::serverStart() {
 
     running_ = true;
-    Scheduler::start(20);
     for (size_t i = 0; i < epolls_.size(); ++i) {
         waitListen(i);
     }
-    cout << "server started" << endl;
 }
 
 void TCPServer::serverStop() { running_ = false; }
 
 Task<TCPServer::Response> TCPServer::handleRequest(std::string &str) {
+    co_await s_;
     auto result = http_.parseRequest(str);
     HTTP::HTTPRequest *request = result.first;
     HTTP::HTTPResponse *response = result.second;
     response->headers.insert({"Server", "tcerver"}); // server
     TCPServer::Response tcp_response;
-    tcp_response.str = http_.dispatchResponseHeaders(response);
+    tcp_response.str = http_.getResponseHeaders(response);
     if (response->getBody().index() == 0) {
         tcp_response.fd = std::get<int>(response->getBody());
     } else {

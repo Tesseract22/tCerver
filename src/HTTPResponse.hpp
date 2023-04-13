@@ -9,9 +9,14 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 typedef std::map<std::string, std::string> s_map_t;
 
 namespace HTTP {
+struct HTTPBody {
+    std::map<std::string, std::string> args;
+    std::vector<std::string_view> bytes;
+};
 enum ResponseType {
     fail = -1,
     text = 0,
@@ -31,13 +36,15 @@ class HTTPRequest {
     HTTPRequest() = default;
     HTTPRequest(char *path_arg,
                 std::map<std::string_view, std::string_view> header_arg,
-                std::map<std::string_view, std::string_view> args_arg,
-                char *body_arg)
-        : path(path_arg), headers(header_arg), args(args_arg), body(body_arg) {}
+                std::map<std::string, std::string> args_arg, char *body_arg)
+        : path(path_arg), headers(header_arg), args(args_arg) {}
     std::string path;
+    std::string method;
+    std::string protocol;
     std::map<std::string_view, std::string_view> headers;
-    std::map<std::string_view, std::string_view> args;
-    const char *body;
+    std::map<std::string, std::string> args;
+    HTTPBody body;
+    std::string_view raw_body;
 };
 
 class HTTPResponseText : public HTTPResponse {

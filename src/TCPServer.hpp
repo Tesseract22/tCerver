@@ -2,6 +2,7 @@
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "MultiThreadQueue.hpp"
+#include "Scheduler.hpp"
 #include "Task.hpp"
 
 #include <condition_variable>
@@ -20,22 +21,11 @@
 #include <vector>
 // TCP server implementation
 #define DEFAULT_PORT 80
-class SocketException : std::exception {
 
-  public:
-    explicit SocketException();
-    SocketException(const char *msg) : msg_(msg) {}
-    SocketException(const std::string &msg) : msg_(msg) {}
-    virtual ~SocketException() noexcept {}
-    virtual const char *what() const noexcept { return msg_.data(); }
-
-  protected:
-    std::string msg_;
-};
 class TCPServer {
   public:
     TCPServer(HTTPUnit &&http, size_t listen_threads = 2,
-              size_t parse_threads = 2, std::ostream &log_io = std::cout,
+              std::ostream &log_io = std::cout,
               std::ostream &err_io = std::cerr);
     ~TCPServer();
     void serverStart();
@@ -59,7 +49,7 @@ class TCPServer {
     class EPoll {
       public:
         EPoll(std::mutex &m_, int master_socket_fd, std::vector<int> &sockt_vec,
-              std::vector<std::mutex *> &mutex_vec,
+              std::vector<std::mutex *> &mutex_vec, Scheduler &s,
               const std::function<Task<Response>(std::string &)> &callback);
         EPoll(EPoll &&other) = default;
         EPoll(const EPoll &X) = delete;
@@ -71,8 +61,8 @@ class TCPServer {
       private:
         void addSocket(int socket_fd_);
         void delSocket(int socket_fd_);
-        void modSocket(int socket_fd_, int act);
-        int getSocket(int socket_fd_);
+        // void modSocket(int socket_fd_, int act);
+        // int getSocket(int socket_fd_);
 
         void lockSocket(int socket_fd);
         void unlockSocket(int socket_fd);
@@ -84,6 +74,7 @@ class TCPServer {
         std::function<Task<Response>(std::string &)> handleReqeust_;
         epoll_event temp_event_;
         bool running_ = false;
+        Scheduler &s_;
         // The socket file descriptor is directly used as indexes
         // The value in the vector represent the status of the socket
     };
@@ -110,8 +101,7 @@ class TCPServer {
 
     // An array of threads listening to requests, we are not responsible for
     // allocating and deallocating this
-    std::vector<std::thread> listen_threads_;
-    std::vector<std::thread> parse_threads_;
+    size_t listen_threads_;
 
     std::vector<int> sockets_;
     std::vector<std::mutex *> mutexes_;
@@ -122,4 +112,5 @@ class TCPServer {
     HTTPUnit http_;
 
     char resource_path_[100];
+    Scheduler s_;
 };

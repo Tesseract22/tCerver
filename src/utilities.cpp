@@ -74,3 +74,8 @@ ssize_t utility::writeFileSocket(int fd, int other_fd) {
     }
     return total;
 }
+
+bool inline utility::startWith(const std::string &longer,
+                               const std::string &prefix) {
+    return equal(prefix.begin(), prefix.end(), longer.begin());
+}
