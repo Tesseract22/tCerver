@@ -11,10 +11,7 @@
 #include <string_view>
 #include <sys/stat.h>
 using namespace std;
-HTTPUnit::HTTPUnit() {
-    url_map_.insert({"/", &HTTP::defaultPage});
-    url_map_.insert({"_default_file_", &HTTP::defaultFileFounder});
-}
+HTTPUnit::HTTPUnit() { url_map_.insert({"/", &HTTP::defaultPage}); }
 
 pair<HTTP::HTTPRequest *, HTTP::HTTPResponse *>
 HTTPUnit::parseRequest(string &raw_request) {
@@ -38,7 +35,7 @@ HTTPUnit::parseRequest(string &raw_request) {
         response = func(request);
 
     } else if (stat(request->path.data() + 1, &stat_buf) == 0) {
-        auto &func = url_map_.at("_default_file_");
+        auto &func = HTTP::defaultFileFounder;
         response = func(request);
 
     } else {

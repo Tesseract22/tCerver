@@ -52,6 +52,7 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
 #if DEBUG
     LOG("start listening")
 #endif
+    m_.lock();
     if (!running_) {
         temp_event_.events = EPOLLIN;
         temp_event_.data.fd = dummpy_fd;
@@ -62,6 +63,7 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
         }
     }
     running_ = true;
+    m_.unlock();
     while (true) {
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
 
