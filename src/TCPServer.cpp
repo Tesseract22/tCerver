@@ -70,9 +70,26 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads, ostream &log_io,
     getcwd(resource_path_, 100);
     pipe(stop_pipe_);
     servers_.push_back(this);
+
+    std::signal(SIGINT, TCPServer::SIGINT_HANDLER);
 }
 
-void TCPServer::sigintHandler(int dummpy) {}
+void TCPServer::SIGINT_HANDLER(int dummpy) {
+
+    for (auto s : servers_) {
+        s->running_ = false;
+        for (auto &e : s->epolls_) {
+            e.stop();
+        }
+        for (auto &e : s->epolls_) {
+            cerr << "write\n";
+            write(s->stop_pipe_[1], "0000", 5);
+        }
+        close(s->stop_pipe_[0]);
+        close(s->stop_pipe_[1]);
+    }
+    Scheduler::SIGINT_HANDLER(dummpy);
+}
 
 void TCPServer::waitListen(size_t id) {
 

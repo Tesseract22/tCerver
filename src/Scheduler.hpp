@@ -10,6 +10,7 @@
 #include <vector>
 #define DEBUG_PRINT(info)                                                      \
     std::cerr << "[" << std::this_thread::get_id() << "] " << info << std::endl;
+
 class Scheduler {
   public:
     // friend class Task;
@@ -21,6 +22,7 @@ class Scheduler {
         for (size_t i = 0; i < count; ++i) {
             threads_.emplace_back(&Scheduler::thread_start, this);
         }
+        list_.push_back(this);
     }
 
     ~Scheduler() {
@@ -42,16 +44,18 @@ class Scheduler {
     void await_suspend(std::coroutine_handle<> handle) { queue_->push(handle); }
     void await_resume() const noexcept {}
 
-    void SIGINT_HANDLER(int dummy) {
-        running_ = false;
-        for (auto &t : threads_) {
-            enqueue(std::coroutine_handle<>());
+    void static SIGINT_HANDLER(int dummy) {
+        for (auto s : list_) {
+            s->running_ = false;
+            for (auto &t : s->threads_) {
+                s->enqueue(std::coroutine_handle<>());
+            }
         }
     }
 
   private:
     // Scheduler() = default;
-
+    static std::vector<Scheduler *> list_;
     void thread_start() {
         while (running_) {
             auto handle = queue_->pull();

@@ -28,6 +28,6 @@ int main(int argc, char *argv[]) {
     f << "sever start" << endl;
     HTTPUnit http;
     http.bindUrl("/test", test);
-    TCPServer server(std::move(http), 2, f);
+    TCPServer server(std::move(http), 1, f);
     server.serverStart();
 }

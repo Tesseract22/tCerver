@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <condition_variable>
 #include <coroutine>
+#include <csignal>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -33,7 +34,8 @@ Task<TCPServer::Response> test(int &i) {
 
 int main() {
     DEBUG_PRINT("main");
-    Scheduler s(2);
+    Scheduler s(100);
+    std::signal(SIGINT, Scheduler::SIGINT_HANDLER);
     // sleep(4);
     // t.then([](int res) { std::cout << "result: " << res << '\n'; });
     auto reading = [&s]() -> Task<void> {

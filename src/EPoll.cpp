@@ -68,6 +68,7 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
 
         if (!running_) {
+            cerr << "epoll closing\n";
             co_return;
         }
         if (num_event < 0) {

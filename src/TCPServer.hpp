@@ -32,7 +32,7 @@ class TCPServer {
     void serverStop();
 
     void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
-    void static sigintHandler(int dummy);
+    void static SIGINT_HANDLER(int dummy);
     typedef int FileFd;
     struct Response {
         std::string str = "";
