@@ -2,7 +2,6 @@
 #include "HTTPResponse.hpp"
 #include "Logs.hpp"
 #include "utilities.hpp"
-#include <cstring>
 #include <iostream>
 #include <map>
 #include <regex>

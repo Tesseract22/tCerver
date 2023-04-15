@@ -4,7 +4,6 @@
 #include "Task.hpp"
 #include <ios>
 #include <iostream>
-#include <stdarg.h>
 #include <string>
 #include <thread>
 #define LOG(...) __debug__(std::this_thread::get_id(), __LINE__, __VA_ARGS__);

@@ -6,14 +6,9 @@
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
-#include <functional>
 #include <iostream>
-#include <memory>
 #include <mutex>
-#include <new>
 #include <optional>
-#include <stdexcept>
-#include <utility>
 
 struct SameThreadResumer {
     std::vector<std::coroutine_handle<>> resumers;

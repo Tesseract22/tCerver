@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
-typedef std::map<std::string, std::string> s_map_t;
 
 namespace HTTP {
 struct HTTPBody {
@@ -30,7 +29,7 @@ enum ResponseType {
 };
 class HTTPResponse {
   public:
-    s_map_t headers;
+    std::map<std::string, std::string> headers;
     std::string status = "200 OK";
     std::string http_ver = "HTTP/1.1";
     ResponseType type = text;

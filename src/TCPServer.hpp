@@ -17,7 +17,6 @@
 #include <string>
 #include <sys/epoll.h>
 #include <thread>
-#include <variant>
 #include <vector>
 // TCP server implementation
 #define DEFAULT_PORT 80
