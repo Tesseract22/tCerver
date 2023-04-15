@@ -29,8 +29,8 @@ if ("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
     "${ColorBold}Delete `CMakeCache.txt` and `CMakeFiles/` before you continue.${ColorReset}")
 endif()
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
+set(CMAKE_CXX_CLANG_TIDY clang-tidy -checks=-*,readability-*)
 
 # Specify C++ compiler and linker.
 # if(NOT DEFINED EWS)

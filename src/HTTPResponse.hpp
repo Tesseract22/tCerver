@@ -15,7 +15,13 @@ typedef std::map<std::string, std::string> s_map_t;
 namespace HTTP {
 struct HTTPBody {
     std::map<std::string, std::string> args;
-    std::vector<std::string_view> bytes;
+    struct HTTPFile {
+        std::string file_name;
+        std::string name;
+        std::string disposition;
+        std::string_view bytes;
+    };
+    std::vector<HTTPFile> bytes;
 };
 enum ResponseType {
     fail = -1,

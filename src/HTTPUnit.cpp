@@ -56,16 +56,30 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
         LOG("POST")
         try {
             auto &content_type = request->headers.at("Content-Type");
-            auto seps = parseSemiColSeperated(string(content_type));
 
             // cerr << "[" << request->headers.at("Content-Type") << "]   ";
-            string &type = seps.at(0);
-            if (type.starts_with(POST_RAW_FORM)) {
+            if (content_type.starts_with(POST_RAW_FORM)) {
                 LOG(request->raw_body)
                 request->body.args = parseArgs(request->raw_body.data());
-            } else if (type.starts_with(POST_FORM_DATA)) {
-                LOG("[", type, "]  ",
-                    strcmp(type.data(), "application/x-www-form-urlencoded"))
+            } else if (content_type.starts_with(POST_FORM_DATA)) {
+                regex boundary_re("boundary=\"?(.+?)\"?[;|$|\n|\r]");
+                cmatch boundary_cm;
+                LOG(content_type);
+                if (regex_search(content_type.data(), boundary_cm,
+                                 boundary_re)) {
+                    string boundary = boundary_cm[1];
+                    LOG(boundary);
+                    regex form_data_reg("Content-Disposition: "
+                                        "(.+?)[\n|\r]{2}([\\s\\S]+?)--" +
+                                        boundary);
+                    cmatch form_data_cm;
+                    const char *form = request->raw_body.data();
+                    regex_search(form, form_data_cm, form_data_reg);
+                    request->body.bytes.push_back(
+                        parseFormDataInfo(form_data_cm[1].str().data()));
+                    request->body.bytes.back().bytes = form_data_cm[2].first;
+                    // request->body.bytes.push_back({})
+                }
             }
             // string &boundary = seps.at(1);
             // cout << type << ' ' << boundary << '\n';
@@ -187,6 +201,23 @@ HTTPUnit::parseSemiColSeperated(const string &str) noexcept {
         search = sm_result.suffix();
     }
     return res;
+}
+
+HTTP::HTTPBody::HTTPFile HTTPUnit::parseFormDataInfo(const char *str) noexcept {
+    HTTP::HTTPBody::HTTPFile info;
+    regex reg("(.*?)(?:$|;)\\s?(?:name=\"(.*?)\"(?:$|;))?\\s?(?:filename=\"(.*?"
+              ")\")?");
+    cmatch cm;
+    regex_match(str, cm, reg);
+    info.disposition = cm[1];
+    if (cm.size() >= 3) {
+        info.name = cm[2];
+    }
+    if (cm.size() >= 4) {
+        info.file_name = cm[3];
+    }
+
+    return info;
 }
 
 void HTTPUnit::bindUrl(

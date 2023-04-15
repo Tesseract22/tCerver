@@ -44,4 +44,5 @@ class HTTPUnit {
         url_map_;
     std::vector<std::string>
     parseSemiColSeperated(const std::string &str) noexcept;
+    HTTP::HTTPBody::HTTPFile parseFormDataInfo(const char *str) noexcept;
 };
