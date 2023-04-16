@@ -63,9 +63,9 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads, ostream &log_io,
         throw std::runtime_error("connot open directory ../resource");
     getcwd(resource_path_, 100);
     pipe(stop_pipe_);
-    servers_.push_back(this);
+    // servers_.push_back(this);
 
-    std::signal(SIGINT, TCPServer::SIGINT_HANDLER);
+    // std::signal(SIGINT, TCPServer::SIGINT_HANDLER);
 }
 
 void TCPServer::SIGINT_HANDLER(int dummpy) {

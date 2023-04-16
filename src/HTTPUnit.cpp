@@ -2,6 +2,7 @@
 #include "HTTPResponse.hpp"
 #include "Logs.hpp"
 #include "utilities.hpp"
+#include <cstddef>
 #include <iostream>
 #include <map>
 #include <regex>
@@ -9,7 +10,14 @@
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
+
+#define GET_SV_MATCH(str, svmatch, index)                                      \
+    string_view(str.data() + svmatch.position(index),                          \
+                (size_t)svmatch.length(index))
+
 using namespace std;
+typedef std::match_results<std::string_view::const_iterator> svmatch;
+
 HTTPUnit::HTTPUnit() { url_map_.insert({"/", &HTTP::defaultPage}); }
 
 pair<HTTP::HTTPRequest *, HTTP::HTTPResponse *>
@@ -30,6 +38,7 @@ HTTPUnit::parseRequest(string &raw_request) {
     auto api_iter = url_map_.find(request->path.data());
     HTTP::HTTPResponse *response;
     if (api_iter != url_map_.end()) { // url map has highest priorities
+        LOG("FUNC");
         auto &func = api_iter->second;
         response = func(request);
 
@@ -38,6 +47,7 @@ HTTPUnit::parseRequest(string &raw_request) {
         response = func(request);
 
     } else {
+        LOG(404);
         response = HTTP::notFoundHandler(request);
     }
     return {request, response};
@@ -54,26 +64,32 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
             auto &content_type = request->headers.at("Content-Type");
 
             // cerr << "[" << request->headers.at("Content-Type") << "]   ";
+            // string_view test = content_type;
             if (content_type.starts_with(POST_RAW_FORM)) {
                 LOG(request->raw_body)
                 request->body.args = parseArgs(request->raw_body.data());
             } else if (content_type.starts_with(POST_FORM_DATA)) {
                 regex boundary_re("boundary=\"?(.+?)\"?[;|$|\n|\r]");
-                cmatch boundary_cm;
+                // std::match_resu boundary_cm;
+                svmatch boundary_cm;
                 LOG(content_type);
-                if (regex_search(content_type.data(), boundary_cm,
-                                 boundary_re)) {
+                if (regex_search(content_type.cbegin(), content_type.cend(),
+                                 boundary_cm, boundary_re)) {
                     string boundary = boundary_cm[1];
                     LOG(boundary);
                     regex form_data_reg("Content-Disposition: "
                                         "(.+?)[\n|\r]{2}([\\s\\S]+?)--" +
                                         boundary);
-                    cmatch form_data_cm;
-                    const char *form = request->raw_body.data();
-                    regex_search(form, form_data_cm, form_data_reg);
-                    request->body.bytes.push_back(
-                        parseFormDataInfo(form_data_cm[1].str().data()));
-                    request->body.bytes.back().bytes = form_data_cm[2].first;
+                    svmatch form_data_svm;
+                    // const char *form = request->raw_body.data();
+                    regex_search(request->raw_body.begin(),
+                                 request->raw_body.end(), form_data_svm,
+                                 form_data_reg);
+                    request->body.bytes.push_back(parseFormDataInfo(
+                        GET_SV_MATCH(request->raw_body, form_data_svm, 1)));
+                    request->body.bytes.back().content =
+                        GET_SV_MATCH(request->raw_body, form_data_svm, 2);
+                    cerr << request->body.bytes.back().content << endl;
                     // request->body.bytes.push_back({})
                 }
             }
@@ -199,18 +215,19 @@ HTTPUnit::parseSemiColSeperated(const string &str) noexcept {
     return res;
 }
 
-HTTP::HTTPBody::HTTPFile HTTPUnit::parseFormDataInfo(const char *str) noexcept {
+HTTP::HTTPBody::HTTPFile
+HTTPUnit::parseFormDataInfo(const string_view &str) noexcept {
     HTTP::HTTPBody::HTTPFile info;
     regex reg("(.*?)(?:$|;)\\s?(?:name=\"(.*?)\"(?:$|;))?\\s?(?:filename=\"(.*?"
               ")\")?");
-    cmatch cm;
-    regex_match(str, cm, reg);
-    info.disposition = cm[1];
-    if (cm.size() >= 3) {
-        info.name = cm[2];
+    svmatch svm;
+    regex_match(str.begin(), str.end(), svm, reg);
+    info.disposition = svm[1];
+    if (svm.size() >= 3) {
+        info.name = svm[2];
     }
-    if (cm.size() >= 4) {
-        info.file_name = cm[3];
+    if (svm.size() >= 4) {
+        info.file_name = svm[3];
     }
 
     return info;

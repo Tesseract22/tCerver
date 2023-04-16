@@ -18,7 +18,7 @@ struct HTTPBody {
         std::string file_name;
         std::string name;
         std::string disposition;
-        std::string_view bytes;
+        std::string_view content;
     };
     std::vector<HTTPFile> bytes;
 };
