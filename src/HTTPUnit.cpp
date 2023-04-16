@@ -73,7 +73,6 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
                 regex boundary_re("boundary=\"?(.+?)\"?[;|$|\n|\r]");
                 // std::match_resu boundary_cm;
                 svmatch boundary_cm;
-                LOG(content_type);
                 if (regex_search(content_type.cbegin(), content_type.cend(),
                                  boundary_cm, boundary_re)) {
                     string boundary = boundary_cm[1];
