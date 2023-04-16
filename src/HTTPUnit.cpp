@@ -33,12 +33,14 @@ HTTPUnit::parseRequest(string &raw_request) {
     } catch (const runtime_error &e) {
         return {request, HTTP::notFoundHandler(request)};
     }; // use body
+#if DEBUG
+    LOG(request->path, " ", request->method)
+#endif
     handleMethod(request);
     struct stat stat_buf;
     auto api_iter = url_map_.find(request->path.data());
     HTTP::HTTPResponse *response;
     if (api_iter != url_map_.end()) { // url map has highest priorities
-        LOG("FUNC");
         auto &func = api_iter->second;
         response = func(request);
 
@@ -59,7 +61,6 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
     const static string POST_RAW_FORM = "application/x-www-form-urlencoded";
     const static string POST_FORM_DATA = "multipart/form-data";
     if (request->method == POST) {
-        LOG("POST")
         try {
             auto &content_type = request->headers.at("Content-Type");
 
@@ -76,7 +77,7 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
                 if (regex_search(content_type.cbegin(), content_type.cend(),
                                  boundary_cm, boundary_re)) {
                     string boundary = boundary_cm[1];
-                    LOG(boundary);
+                    // LOG(boundary);
                     regex form_data_reg("Content-Disposition: "
                                         "(.+?)[\n|\r]{2}([\\s\\S]+?)--" +
                                         boundary);
@@ -99,7 +100,6 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
             LOG("error");
         }
     } else {
-        LOG("GET")
     }
 }
 
