@@ -59,10 +59,13 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
             throw runtime_error("failed to add dummy fd to epoll");
         }
     }
+#if DEBUG
+    LOG("Epoll starts")
+#endif
     running_ = true;
     m_.unlock();
     while (true) {
-        LOG("here")
+        // LOG("here")
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
 
         if (!running_) {

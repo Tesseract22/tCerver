@@ -82,14 +82,17 @@ void HTTPUnit::handleMethod(HTTP::HTTPRequest *request) {
                                         boundary);
                     svmatch form_data_svm;
                     // const char *form = request->raw_body.data();
-                    regex_search(request->raw_body.begin(),
-                                 request->raw_body.end(), form_data_svm,
-                                 form_data_reg);
-                    request->body.bytes.push_back(parseFormDataInfo(
-                        GET_SV_MATCH(request->raw_body, form_data_svm, 1)));
-                    request->body.bytes.back().content =
-                        GET_SV_MATCH(request->raw_body, form_data_svm, 2);
-                    cerr << request->body.bytes.back().content << endl;
+                    string_view form = request->raw_body;
+                    while (regex_search(form.begin(), form.end(), form_data_svm,
+                                        form_data_reg)) {
+                        request->body.bytes.push_back(parseFormDataInfo(
+                            GET_SV_MATCH(request->raw_body, form_data_svm, 1)));
+                        request->body.bytes.back().content =
+                            GET_SV_MATCH(request->raw_body, form_data_svm, 2);
+                        form = string_view();
+                        form = form_data_svm.suffix().str();
+                    }
+
                     // request->body.bytes.push_back({})
                 }
             }
