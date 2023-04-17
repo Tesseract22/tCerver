@@ -4,7 +4,7 @@
 #include <mutex>
 
 #include <vector>
-#define INIT_SIZE 4
+#define INIT_SIZE 1
 
 template <typename T> class MultiThreadQueue {
   public:
@@ -67,12 +67,12 @@ template <typename T> void MultiThreadQueue<T>::push(const T &x) {
     data_[tail_++] = T(x);
     tail_ %= size_;
     curr_size_++;
-    cond_.notify_all();
+    lock.unlock();
+    cond_.notify_one();
 }
 
 template <typename T> T &MultiThreadQueue<T>::pull() {
     std::unique_lock<std::mutex> lock(m_);
-
     cond_.wait(lock, [this] { return curr_size_ != 0; });
     T &ret = data_[top_++];
     top_ %= size_;

@@ -25,12 +25,13 @@ class TCPServer {
   public:
     TCPServer(HTTPUnit &&http, size_t listen_threads = 2,
               std::ostream &log_io = std::cout,
-              std::ostream &err_io = std::cerr);
+              const std::string &static_path = "resource");
     ~TCPServer();
     void serverStart();
     void serverStop();
 
-    void logRequest(HTTP::HTTPRequest *request, HTTP::HTTPResponse *response);
+    Task<void> logRequest(HTTP::HTTPRequest *request,
+                          HTTP::HTTPResponse *response);
     void static SIGINT_HANDLER(int dummy);
     typedef int FileFd;
     struct Response {
@@ -82,14 +83,10 @@ class TCPServer {
     static std::vector<TCPServer *> servers_;
     int stop_pipe_[2];
 
-    void waitParse(size_t id);
-    void waitListen(size_t id);
-
     Task<TCPServer::Response> handleRequest(std::string &str);
     bool running_;
 
     std::ostream &log_io_;
-    std::ostream &err_io_;
 
     /**
       @new
@@ -100,7 +97,6 @@ class TCPServer {
 
     // An array of threads listening to requests, we are not responsible for
     // allocating and deallocating this
-    size_t listen_threads_;
 
     std::vector<int> sockets_;
     std::vector<std::mutex *> mutexes_;
@@ -112,4 +108,5 @@ class TCPServer {
 
     char resource_path_[100];
     Scheduler s_;
+    Scheduler log_s_;
 };

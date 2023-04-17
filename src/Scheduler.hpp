@@ -2,6 +2,7 @@
 #include "MultiThreadQueue.hpp"
 #include <condition_variable>
 #include <coroutine>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -35,12 +36,15 @@ class Scheduler {
         queue_ = other.queue_;
         running_ = other.running_;
     }
-    void enqueue(const std::coroutine_handle<> &handle) {
+    inline void enqueue(const std::coroutine_handle<> &handle) {
         queue_->push(handle);
     }
 
     bool await_ready() const noexcept { return false; }
-    void await_suspend(std::coroutine_handle<> handle) { queue_->push(handle); }
+    void await_suspend(std::coroutine_handle<> handle) {
+        // std::cerr << "??\n";
+        queue_->push(handle);
+    }
     void await_resume() const noexcept {}
 
     void static SIGINT_HANDLER(int dummy) {
@@ -51,6 +55,8 @@ class Scheduler {
             }
         }
     }
+
+    inline size_t threadCount() const { return threads_.size(); }
 
   private:
     // Scheduler() = default;
@@ -64,8 +70,9 @@ class Scheduler {
             // DEBUG_PRINT(handle.done());
         }
     }
-    volatile bool running_ = true;
     std::vector<std::thread> threads_;
     std::shared_ptr<MultiThreadQueue<std::coroutine_handle<>>> queue_;
+    volatile bool running_ = true;
+
     // static std::vector<Scheduler*>
 };

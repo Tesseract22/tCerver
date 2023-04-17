@@ -21,7 +21,7 @@ HTTP::HTTPResponse *test(HTTP::HTTPRequest *request) {
 HTTP::HTTPResponse *post(HTTP::HTTPRequest *request) {
     HTTP::HTTPResponseText *response = new HTTP::HTTPResponseText;
     cerr << request->body.bytes[0].content << endl;
-
+    cerr << request->body.bytes[1].content << endl;
     // cerr << request->method << endl;
     return response;
 }
@@ -36,6 +36,6 @@ int main(int argc, char *argv[]) {
     HTTPUnit http;
     http.bindUrl("/test", test);
     http.bindUrl("/test_post", post);
-    TCPServer server(std::move(http), 1, f);
+    TCPServer server(std::move(http), 10, f);
     server.serverStart();
 }

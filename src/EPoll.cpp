@@ -46,15 +46,15 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
     co_await s_;
     epoll_event revents[20];
 
-#if DEBUG
-    LOG("start listening")
-#endif
+// #if DEBUG
+//     LOG("start listening")
+// #endif
+#if 1
     m_.lock();
     if (!running_) {
         temp_event_.events = EPOLLIN;
         temp_event_.data.fd = dummpy_fd;
         if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, dummpy_fd, &temp_event_) < 0) {
-            DEBUG_PRINT("DUMMY");
             perror(NULL);
             throw runtime_error("failed to add dummy fd to epoll");
         }
@@ -62,6 +62,7 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
     running_ = true;
     m_.unlock();
     while (true) {
+        LOG("here")
         int num_event = epoll_wait(epoll_fd_, revents, 20, -1);
 
         if (!running_) {
@@ -93,9 +94,6 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
                     m_.unlock();
 
                 } else if (revents[i].events & EPOLLIN) {
-#if DEBUG
-                    LOG("incoming read from: ", socket_i)
-#endif
                     [socket_i, this](int i = 0) -> Task<void> {
                         co_await s_;
                         char buffer[1024];
@@ -114,6 +112,7 @@ Task<void> TCPServer::EPoll::wait(int dummpy_fd) {
             }
         }
     }
+#endif
 }
 void TCPServer::EPoll::addSocket(int socket_fd) {
     if ((size_t)socket_fd >= socket_vec_.size()) {

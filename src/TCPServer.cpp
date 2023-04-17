@@ -1,4 +1,5 @@
 #include "TCPServer.hpp"
+#include "Exceptions.hpp"
 #include "HTTPResponse.hpp"
 #include "HTTPUnit.hpp"
 #include "Logs.hpp"
@@ -20,21 +21,20 @@
 #include <utility>
 #include <vector>
 using namespace std;
-
+#define THREAD_SIZE_MUL 2
 std::vector<TCPServer *> TCPServer::servers_;
 TCPServer::~TCPServer() {}
 
 TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads, ostream &log_io,
-                     ostream &err_io)
+                     const string &static_path)
 
     : log_io_(log_io),
-      err_io_(err_io),
       socket_fd_(socket(AF_INET, SOCK_STREAM, 0)),
       port_(DEFAULT_PORT),
-      listen_threads_(listen_threads),
       mutexes_(),
       http_(http),
-      s_(10) {
+      s_(listen_threads * THREAD_SIZE_MUL),
+      log_s_(1) {
     // setting up the socket
     if (listen_threads < 1)
         throw runtime_error("threads number must be at least 1");
@@ -53,11 +53,11 @@ TCPServer::TCPServer(HTTPUnit &&http, size_t listen_threads, ostream &log_io,
     fcntl(socket_fd_, F_SETFL, O_NONBLOCK);
 
     if (bind(socket_fd_, (sockaddr *)&addr_, sizeof(addr_)) < 0) {
-        throw runtime_error("bind failed");
+        throw SocketException("bind failed");
     }
 
     if (listen(socket_fd_, 3) < 0)
-        throw runtime_error("listen failed");
+        throw SocketException("listen failed");
 
     if (chdir("../resource"))
         throw std::runtime_error("connot open directory ../resource");
@@ -85,19 +85,11 @@ void TCPServer::SIGINT_HANDLER(int dummpy) {
     Scheduler::SIGINT_HANDLER(dummpy);
 }
 
-void TCPServer::waitListen(size_t id) {
-
-    for (size_t i = 0; i < listen_threads_; ++i) {
-        epolls_[id].wait(stop_pipe_[0]); // start coroutine;
-    }
-}
-
 void TCPServer::serverStart() {
 
     running_ = true;
-    for (size_t i = 0; i < epolls_.size(); ++i) {
-        waitListen(i);
-    }
+    for (auto &e : epolls_)
+        e.wait(stop_pipe_[0]);
 }
 
 void TCPServer::serverStop() { running_ = false; }
@@ -115,18 +107,20 @@ Task<TCPServer::Response> TCPServer::handleRequest(std::string &str) {
     } else {
         tcp_response.str += std::move(std::get<string>(response->getBody()));
     }
-    // logRequest(request, response);
+    logRequest(request, response);
     delete request;
     delete response;
     co_return tcp_response;
 }
 
-void TCPServer::logRequest(HTTP::HTTPRequest *request,
-                           HTTP::HTTPResponse *response) {
+Task<void> TCPServer::logRequest(HTTP::HTTPRequest *request,
+                                 HTTP::HTTPResponse *response) {
+    co_await log_s_;
     log_io_ << request->path << ' ';
     log_io_ << request->headers["method"] << ' ';
     log_io_ << response->status << ' ';
     auto now = chrono::system_clock::to_time_t(chrono::system_clock::now());
     log_io_ << ctime(&now);
     log_io_ << endl;
+    co_return;
 }
